@@ -11,7 +11,6 @@ class OcrClass:
     def funcOCR(imageString) -> str:
 
         # tesseract取得
-        pyocr.tesseract.TESSERACT_CMD = r"C:\Users\kakeh\scoop\apps\tesseract\5.0.0.20211201\tesseract.exe"
         tools = pyocr.get_available_tools()
         tool = tools[0]
 
