@@ -10,12 +10,6 @@ class OcrClass:
     @staticmethod
     def funcOCR(imageString) -> str:
 
-        # imageHeader = ["89 50 4E 47", "47 49 46 38", "FF D8"]
-
-        # for item in imageHeader:
-        #     if item not in imageBinary[1:16]:
-        #         return None
-
         # tesseract取得
         pyocr.tesseract.TESSERACT_CMD = r"C:\Users\kakeh\scoop\apps\tesseract\5.0.0.20211201\tesseract.exe"
         tools = pyocr.get_available_tools()
