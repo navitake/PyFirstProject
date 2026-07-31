@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>週末ダンジョン プロトタイプ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --bg:#0c1120; --panel:#141b2f; --panel2:#1a2340; --frame:#aab3d6; --frame-dim:#3c4668;
+  --ink:#eef1fb; --ink-dim:#9aa3c4; --gold:#e8b64c; --danger:#e0604f;
+  --hp:#62d68f; --mp:#5fa8ea;
+  --str:#e8735f; --int:#5fa8ea; --vit:#62d68f; --dex:#e8b64c; --mnd:#b48ae8;
+}
+*{box-sizing:border-box; margin:0; padding:0}
+html{background:var(--bg)}
+body{
+  font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic UI",sans-serif;
+  color:var(--ink); background:var(--bg); line-height:1.6; padding:20px 14px 60px;
+}
+.num, .bar-label{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace; font-variant-numeric:tabular-nums}
+.wrap{max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:16px}
+.window{
+  background:var(--panel); border:2px solid var(--frame); border-radius:8px;
+  box-shadow:inset 0 0 0 3px var(--bg), inset 0 0 0 4px var(--frame-dim);
+  padding:18px 18px 16px;
+}
+.eyebrow{color:var(--gold); font-size:11px; font-weight:700; letter-spacing:.18em; margin-bottom:6px}
+h1{font-size:22px; letter-spacing:.06em; text-wrap:balance}
+h2{font-size:16px; letter-spacing:.04em; margin-bottom:10px}
+.sub{color:var(--ink-dim); font-size:12.5px}
+button{
+  font-family:inherit; font-size:13.5px; color:var(--ink); background:var(--panel2);
+  border:1.5px solid var(--frame-dim); border-radius:6px; padding:8px 12px; cursor:pointer;
+  transition:border-color .12s, background .12s;
+}
+button:hover:not(:disabled){border-color:var(--frame); background:#20294c}
+button:focus-visible{outline:2px solid var(--gold); outline-offset:1px}
+button:disabled{opacity:.38; cursor:default}
+button.primary{border-color:var(--gold); color:var(--gold); font-weight:700}
+button.primary:hover:not(:disabled){background:#2a2410}
+.screen{display:none}
+.screen.on{display:flex; flex-direction:column; gap:16px}
+/* week planner */
+.day-head{display:flex; align-items:baseline; justify-content:space-between; gap:8px; flex-wrap:wrap}
+.day-dots{display:flex; gap:5px}
+.day-dots span{width:9px; height:9px; border-radius:50%; background:var(--frame-dim); display:inline-block}
+.day-dots span.done{background:var(--gold)}
+.day-dots span.now{background:var(--ink); box-shadow:0 0 0 2px var(--gold)}
+.cat-row{display:grid; grid-template-columns:9em 1fr auto; gap:10px; align-items:center; padding:9px 0; border-bottom:1px solid #232c4e}
+.cat-row:last-child{border-bottom:none}
+.cat-name{font-size:13.5px; font-weight:700}
+.cat-name small{display:block; font-weight:400; color:var(--ink-dim); font-size:11px}
+.statbar{height:14px; background:#0a0e1b; border:1px solid var(--frame-dim); border-radius:4px; position:relative; overflow:hidden}
+.statbar i{position:absolute; inset:0; width:0%; border-radius:3px; transition:width .25s}
+.statbar b{position:absolute; right:5px; top:-3px; font-size:11px; font-weight:400; color:var(--ink)}
+.today{display:flex; align-items:center; gap:6px}
+.today .pips{display:flex; gap:3px}
+.today .pips span{width:8px; height:8px; border-radius:2px; background:var(--frame-dim)}
+.today .pips span.hit{background:var(--gold)}
+.presets{display:flex; gap:8px; flex-wrap:wrap}
+.spread{display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:center}
+/* job select */
+.job-card{display:block; width:100%; text-align:left; margin-bottom:8px; padding:10px 14px}
+.job-card .tier{font-size:10.5px; color:var(--gold); letter-spacing:.14em; font-weight:700}
+.job-card .jname{font-size:15px; font-weight:700}
+.job-card .jdesc{font-size:12px; color:var(--ink-dim)}
+/* bars */
+.bar{height:16px; background:#0a0e1b; border:1px solid var(--frame-dim); border-radius:4px; position:relative; overflow:hidden}
+.bar i{position:absolute; inset:0; width:100%; transition:width .3s}
+.bar.hp i{background:var(--hp)} .bar.mp i{background:var(--mp)} .bar.ehp i{background:var(--danger)}
+.bar-label{font-size:11px; color:var(--ink-dim); display:flex; justify-content:space-between; margin-bottom:2px}
+.msgbox{
+  background:#0a0e1b; border:1.5px solid var(--frame-dim); border-radius:6px;
+  padding:12px 36px 12px 14px; font-size:14px; min-height:62px; line-height:1.7;
+  cursor:pointer; position:relative; user-select:none;
+}
+.msgbox .t-gold{color:var(--gold)} .msgbox .t-dmg{color:var(--danger)} .msgbox .t-heal{color:var(--hp)}
+.msgbox .t-mp{color:var(--mp)} .msgbox .t-dim{color:var(--ink-dim)}
+.msgbox .marr{position:absolute; right:13px; bottom:8px; color:var(--gold); font-size:12px; opacity:0}
+.msgbox.wait .marr{opacity:1; animation:blinkA .9s infinite}
+@keyframes blinkA{50%{transform:translateY(3px); opacity:.35}}
+.cmds{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:7px}
+.cmds button{text-align:left; font-size:12.5px; padding:7px 10px; line-height:1.35}
+.cmds button small{display:block; color:var(--ink-dim); font-size:10.5px}
+.cmds button .cost{color:var(--mp)}
+.badge{display:inline-block; font-size:10px; padding:1px 7px; border-radius:99px; border:1px solid var(--frame-dim); color:var(--ink-dim); vertical-align:2px}
+.kv{display:grid; grid-template-columns:auto 1fr; gap:2px 14px; font-size:12.5px}
+.kv dt{color:var(--ink-dim)} .kv dd{font-weight:600}
+table.mini{border-collapse:collapse; width:100%; font-size:12px}
+table.mini th,table.mini td{padding:4px 8px; border-bottom:1px solid #232c4e; text-align:left}
+table.mini th{color:var(--ink-dim); font-weight:600}
+.note{font-size:11.5px; color:var(--ink-dim); border-left:3px solid var(--frame-dim); padding-left:10px}
+.result-big{font-size:28px; text-align:center; letter-spacing:.1em; font-weight:800}
+.result-big.win{color:var(--gold)} .result-big.lose{color:var(--danger)}
+/* ===== バトルシーン ===== */
+.scene{
+  position:relative; height:280px; border-radius:6px; overflow:hidden;
+  background:
+    radial-gradient(120% 90% at 50% 112%, #2a3354 0%, transparent 55%),
+    radial-gradient(55% 40% at 76% 34%, rgba(130,150,255,.12), transparent 70%),
+    linear-gradient(180deg, #04060e 0%, #0a1023 55%, #141c38 100%);
+}
+.scene::before{content:''; position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(2px 2px at 18% 22%, rgba(255,255,255,.30), transparent 60%),
+    radial-gradient(1.5px 1.5px at 64% 12%, rgba(255,255,255,.22), transparent 60%),
+    radial-gradient(2px 2px at 88% 48%, rgba(255,255,255,.16), transparent 60%),
+    radial-gradient(1.5px 1.5px at 38% 40%, rgba(255,255,255,.12), transparent 60%);
+}
+.scene.bossbg{
+  background:
+    radial-gradient(120% 90% at 50% 112%, #4a2333 0%, transparent 55%),
+    radial-gradient(55% 40% at 76% 30%, rgba(255,110,110,.14), transparent 70%),
+    linear-gradient(180deg, #0a0410 0%, #180a1c 55%, #2c1024 100%);
+}
+.sprite{position:absolute; line-height:1; user-select:none;
+  filter:drop-shadow(0 12px 14px rgba(0,0,0,.55))}
+.sprite.enemy{font-size:86px; right:13%; top:17%; animation:idleFloat 3.2s ease-in-out infinite}
+.sprite.enemy.evt{animation:none; top:26%; font-size:70px}
+.sprite.hero{font-size:56px; left:9%; bottom:15%; animation:idleBreath 2.8s ease-in-out infinite}
+@keyframes idleFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-11px)}}
+@keyframes idleBreath{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.sprite.enemy.hitfx{animation:hitFlash .45s ease}
+@keyframes hitFlash{
+  0%{filter:brightness(3.2) drop-shadow(0 0 18px rgba(255,255,255,.9))}
+  25%{transform:translateX(9px)} 55%{transform:translateX(-7px)}
+  100%{filter:drop-shadow(0 12px 14px rgba(0,0,0,.55))}}
+.sprite.hero.lunge{animation:lungeA .42s ease}
+@keyframes lungeA{35%{transform:translate(52px,-8px)}100%{transform:translate(0,0)}}
+.sprite.enemy.elunge{animation:elungeA .42s ease}
+@keyframes elungeA{35%{transform:translate(-56px,10px)}100%{transform:translate(0,0)}}
+.sprite.enemy.die{animation:dieA .7s ease forwards}
+@keyframes dieA{40%{filter:brightness(3)}100%{opacity:0; transform:translateY(14px) scale(.55) rotate(12deg)}}
+.scene.shakefx{animation:shakeA .4s ease}
+@keyframes shakeA{20%{transform:translate(-6px,3px)}45%{transform:translate(5px,-3px)}70%{transform:translate(-4px,2px)}}
+#popups{position:absolute; inset:0; pointer-events:none; z-index:5}
+.pop{position:absolute; font-family:Consolas,Menlo,monospace; font-weight:800; font-size:25px;
+  color:#fff; text-shadow:0 2px 7px rgba(0,0,0,.9); animation:popA .95s ease-out forwards}
+.pop.crit{color:var(--gold); font-size:32px}
+.pop.mag{color:#9db4ff} .pop.heal{color:var(--hp)} .pop.mp{color:var(--mp)}
+.pop.dmg{color:#ff8d80} .pop.miss{color:var(--ink-dim); font-size:15px; font-weight:600}
+@keyframes popA{0%{opacity:0; transform:translateY(8px) scale(.6)}15%{opacity:1; transform:translateY(0) scale(1.18)}32%{transform:scale(1)}100%{opacity:0; transform:translateY(-36px)}}
+.plate{position:absolute; background:rgba(7,10,20,.74); border:1.5px solid var(--frame-dim);
+  border-radius:6px; padding:6px 10px; z-index:4}
+#enemy-window{top:10px; right:10px; width:216px}
+#player-plate{left:10px; bottom:10px; width:206px}
+#scene-hud{position:absolute; top:10px; left:12px; font-size:11px; color:var(--ink-dim); z-index:4;
+  text-shadow:0 1px 3px #000}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important; animation:none!important} }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">TODO ROGUELIKE RPG — PLAYABLE PROTOTYPE</div>
+    <h1>週末ダンジョン</h1>
+    <div class="sub">タスクをこなして週末のキャラを作り、ダンジョンに強制出発する。SPEC確定パラメータ準拠の検証用プロトタイプ。</div>
+  </header>
+
+  <!-- ============ 週プラン ============ -->
+  <section id="sc-plan" class="screen on">
+    <div class="window">
+      <div class="day-head">
+        <h2 id="day-title">1日目（月曜日）</h2>
+        <div class="day-dots" id="day-dots"></div>
+      </div>
+      <div class="sub" style="margin-bottom:6px">各カテゴリ1日3件まで。同じ日に重ねるほど伸びが鈍る（×1.0 → ×0.67 → ×0.33）。</div>
+      <div id="cat-rows"></div>
+      <div class="spread" style="margin-top:12px">
+        <button id="btn-redo-day">この日をやり直す</button>
+        <button id="btn-next-day" class="primary">次の日へ ▸</button>
+      </div>
+    </div>
+    <div class="window">
+      <h2>おまかせ週プラン</h2>
+      <div class="presets">
+        <button data-preset="str">筋トレ週（運動特化）</button>
+        <button data-preset="int">学者週（勉強特化）</button>
+        <button data-preset="bal">バランス週（全種1件/日）</button>
+        <button data-preset="hard">全力週（毎日15件）</button>
+        <button data-preset="rand">気まぐれ週</button>
+      </div>
+      <div class="sub" style="margin-top:8px">押すと今の週を破棄して7日間ぶん自動入力し、集計へ進みます。</div>
+    </div>
+    <div class="window">
+      <h2>今週の見込み</h2>
+      <div id="preview-jobs" class="sub"></div>
+      <div id="preview-cmds" class="sub"></div>
+    </div>
+  </section>
+
+  <!-- ============ 職業選択 ============ -->
+  <section id="sc-job" class="screen">
+    <div class="window">
+      <div class="eyebrow">SUNDAY NIGHT</div>
+      <h2>日曜終了 — ステータス確定</h2>
+      <div class="kv" id="final-stats"></div>
+    </div>
+    <div class="window">
+      <h2>職業を選択してください</h2>
+      <div id="job-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ 出撃準備 ============ -->
+  <section id="sc-ready" class="screen">
+    <div class="window">
+      <div class="eyebrow">CHARACTER</div>
+      <h2 id="ready-title"></h2>
+      <div class="kv" id="ready-stats"></div>
+    </div>
+    <div class="window">
+      <h2>職業スキル</h2>
+      <table class="mini" id="ready-skills"></table>
+      <div class="note" id="ready-skill-note" style="margin-top:8px; display:none"></div>
+    </div>
+    <div class="window">
+      <h2>タスクコマンド — 2枠を選んで持ち込む</h2>
+      <div class="sub" style="margin-bottom:6px">今週解禁したコマンドから2つまで装備できる。パーク習得で3枠に拡張予定（未実装）。</div>
+      <table class="mini" id="ready-cmds"></table>
+    </div>
+    <div class="window" style="text-align:center">
+      <button class="primary" id="btn-depart" style="font-size:15px; padding:10px 28px">ダンジョンへ出発する ▸</button>
+      <div class="sub" style="margin-top:6px">出発は強制です。戻ることはできない。</div>
+    </div>
+  </section>
+
+  <!-- ============ ダンジョン ============ -->
+  <section id="sc-dungeon" class="screen">
+    <div class="window" style="padding:10px">
+      <div class="scene" id="scene">
+        <div id="scene-hud"><span class="num" id="floor-label"></span> ・ <span class="num" id="point-label"></span></div>
+        <div class="plate" id="enemy-window" style="display:none">
+          <div id="enemy-name" style="font-size:12.5px; font-weight:700"></div>
+          <div class="num" id="enemy-tags" style="font-size:10px; color:var(--ink-dim)"></div>
+          <div class="bar ehp" style="height:10px; margin-top:4px"><i id="ehp-bar"></i></div>
+        </div>
+        <div class="sprite enemy" id="enemy-face"></div>
+        <div class="sprite hero" id="hero-sp"></div>
+        <div class="plate" id="player-plate">
+          <div class="bar-label"><span>HP</span><span id="hp-num"></span></div>
+          <div class="bar hp" style="height:10px"><i id="hp-bar"></i></div>
+          <div class="bar-label" style="margin-top:4px"><span>MP</span><span id="mp-num"></span></div>
+          <div class="bar mp" style="height:10px"><i id="mp-bar"></i></div>
+        </div>
+        <div id="popups"></div>
+      </div>
+      <div class="msgbox" id="msgbox" style="margin-top:10px" title="クリックで送る">
+        <span id="msg-text"></span><span class="marr">▼</span>
+      </div>
+      <div class="cmds" id="cmds" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- ============ リザルト ============ -->
+  <section id="sc-result" class="screen">
+    <div class="window" style="padding:28px 18px">
+      <div class="result-big" id="result-title"></div>
+      <div class="sub" style="text-align:center; margin-top:6px" id="result-sub"></div>
+    </div>
+    <div class="window">
+      <h2>記録</h2>
+      <div class="kv" id="result-kv"></div>
+    </div>
+    <div class="window" style="text-align:center">
+      <button class="primary" id="btn-retry" style="font-size:15px; padding:10px 28px">翌月曜 — 新しい週を始める</button>
+    </div>
+  </section>
+
+  <footer class="note">
+    確定済み: 成長テーブル / 日次乗数 / HP・MP式 / ダメージ式 / 職業しきい値 / Tier1スキル / コンボ4種 / 通常攻撃(STR・INTの高い方×0.7) / タスクコマンド装備2枠。
+    仮実装（未確定）: 会心率 5+DEX×0.5% ・回避率 DEX×0.4% ・敵能力値 ・タスクコマンドの威力 ・攻略ポイント配分 ・装備3枠パーク。
+    未実装: お助けコマンド / パーマネントスキル装備 / 難易度選択。
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ===== 確定パラメータ（SPEC準拠） ===== */
+const CATS = [
+  {k:'STR', cat:'運動・スポーツ', color:'var(--str)'},
+  {k:'INT', cat:'学習・勉強',   color:'var(--int)'},
+  {k:'VIT', cat:'健康・食事',   color:'var(--vit)'},
+  {k:'DEX', cat:'仕事・作業',   color:'var(--dex)'},
+  {k:'MND', cat:'趣味・創作',   color:'var(--mnd)'},
+];
+const DAY_MULT = [1, 0.67, 0.33];
+function baseGain(v){ return v>=80?0 : v>=68?1 : v>=55?2 : v>=40?3 : v>=20?4 : 5; }
+const maxHP = s => s.VIT*5+100;
+const maxMP = s => s.MND*4+20;
+const DEF = s => (s.STR+s.VIT)/2;
+const RES = s => (s.INT+s.MND)/2;
+function dmgCalc(atk, def, mult){ return Math.max(1, Math.round(atk*1.5*mult*(100/(100+def)))); }
+
+/* ===== タスクコマンド（威力は仮） ===== */
+const TASKCMDS = {
+  STR:[{n:'重撃',   d:'STR×1.7 物理', use:(g)=>g.hitP(1.7,'重撃')},
+       {n:'連撃',   d:'STR×0.9 物理 ×2回', use:(g)=>{g.hitP(0.9,'連撃・一'); if(g.enemy.hp>0) g.hitP(0.9,'連撃・二');}}],
+  INT:[{n:'弱点分析', d:'敵の防御-25%(2T) + INT×0.6 魔法', use:(g)=>{g.enemyEff.defDown={v:25,t:2}; g.log('敵の弱点を見抜いた！ 防御-25%','t-gold'); g.hitM(0.6,'弱点分析');}},
+       {n:'応用理論', d:'INT×1.8 魔法', use:(g)=>g.hitM(1.8,'応用理論')}],
+  VIT:[{n:'回復食',  d:'HP回復 VIT×2.5', use:(g)=>g.heal(Math.round(g.st.VIT*2.5*g.enh('VIT')),'回復食')},
+       {n:'完全栄養', d:'HP回復 VIT×1.5 + 攻撃+10%(2T)', use:(g)=>{g.heal(Math.round(g.st.VIT*1.5),'完全栄養'); g.playerEff.atkUp={v:10,t:2}; g.log('力が湧いてくる！ 攻撃+10%','t-gold');}}],
+  DEX:[{n:'精密打撃', d:'STR×1.2 物理・会心+40%', use:(g)=>g.hitP(1.2,'精密打撃',40)},
+       {n:'手際良さ', d:'回避+30%(2T) + STR×0.8 物理', use:(g)=>{g.playerEff.evadeUp={v:30,t:2}; g.log('身のこなしが軽い！ 回避+30%','t-gold'); g.hitP(0.8,'手際良さ');}}],
+  MND:[{n:'奇跡',   d:'INT×1.5 魔法', use:(g)=>g.hitM(1.5,'奇跡')},
+       {n:'無心',   d:'MP+25 回復', use:(g)=>g.gainMP(25,'無心')}],
+};
+const COMBOS = [
+  {a:'重撃', b:'弱点分析', n:'必殺の一撃', fire:(g)=>g.hitP(3.0,'コンボ【必殺の一撃】')},
+  {a:'回復食', b:'精密打撃', n:'集中療法', fire:(g)=>{g.heal(Math.round(g.st.VIT*2),'コンボ【集中療法】'); g.hitP(1.2,'集中療法・追撃');}},
+  {a:'奇跡', b:'重撃', n:'渾身の一撃', fire:(g)=>g.hitP(2.5,'コンボ【渾身の一撃】',100)},
+  {a:'弱点分析', b:'奇跡', n:'大魔法召喚', fire:(g)=>g.hitM(2.5,'コンボ【大魔法召喚】')},
+];
+
+/* ===== 職業（しきい値確定） ===== */
+const JOBS = [
+  {t:5,n:'覇王',   c:s=>s.STR>=65&&s.VIT>=65, d:'武威と鉄壁を兼ね備えた征服者'},
+  {t:5,n:'魔神',   c:s=>s.STR>=65&&s.INT>=65, d:'魔力と武力を極めた破壊の化身'},
+  {t:5,n:'光神官', c:s=>s.INT>=65&&s.VIT>=65&&s.MND>=65, d:'知・体・心を極めた高位神官'},
+  {t:5,n:'幽冥王', c:s=>s.DEX>=65&&s.MND>=65, d:'捉えどころのない幻の存在'},
+  {t:5,n:'絶対者', c:s=>s.STR>=65&&s.INT>=65&&s.VIT>=65, d:'あらゆる力を体現した頂点'},
+  {t:4,n:'勇者',   c:s=>CATS.every(c=>s[c.k]>=25), d:'全能力が底上げされた真の万能職'},
+  {t:3,n:'魔法剣士',c:s=>s.STR>=20&&s.INT>=20, d:'物理・魔法どちらも扱える万能アタッカー'},
+  {t:3,n:'パラディン',c:s=>s.STR>=20&&s.VIT>=20, d:'攻防を兼ね備えた重装戦士'},
+  {t:3,n:'竜騎士', c:s=>s.STR>=20&&s.DEX>=20, d:'高威力と高機動のジャンプ攻撃'},
+  {t:3,n:'英雄',   c:s=>s.STR>=20&&s.MND>=20, d:'極限状況で会心の一撃を放つ戦士'},
+  {t:3,n:'賢者',   c:s=>s.INT>=20&&s.VIT>=20, d:'攻・補・回復を器用にこなす'},
+  {t:3,n:'召喚士', c:s=>s.INT>=20&&s.DEX>=20, d:'精霊を喚び素早く複数回行動'},
+  {t:3,n:'星術師', c:s=>s.INT>=20&&s.MND>=20, d:'星を読みバフ・デバフを操る'},
+  {t:3,n:'武闘家', c:s=>s.VIT>=20&&s.DEX>=20, d:'素手で高火力かつ回避も高い格闘家'},
+  {t:3,n:'聖者',   c:s=>s.VIT>=20&&s.MND>=20, d:'蘇生や強力回復を使う癒し手'},
+  {t:3,n:'レンジャー',c:s=>s.DEX>=20&&s.MND>=20, d:'罠・連射・クリティカルに優れる狩人'},
+  {t:2,n:'剣聖',   c:s=>s.STR>=30, d:'会心ダメージが突出して高い剣の達人'},
+  {t:2,n:'大魔道士',c:s=>s.INT>=30, d:'全体魔法や上位魔法を操る'},
+  {t:2,n:'聖職者', c:s=>s.VIT>=30, d:'完全蘇生・強化回復が使える'},
+  {t:2,n:'忍者',   c:s=>s.DEX>=30, d:'先手必勝の奇襲と高回避'},
+  {t:2,n:'禅師',   c:s=>s.MND>=30, d:'低確率の超強力な奇跡を発動する'},
+  {t:1,n:'戦士',   c:s=>s.STR>=15, d:'低コストを刻む安定型前衛'},
+  {t:1,n:'魔法使い',c:s=>s.INT>=15, d:'高コストで大火力'},
+  {t:1,n:'僧侶',   c:s=>s.VIT>=15, d:'耐えて回復しながら殴る'},
+  {t:1,n:'盗賊',   c:s=>s.DEX>=15, d:'会心と搦め手'},
+  {t:1,n:'吟遊詩人',c:s=>s.MND>=15, d:'威力は低いが盤面をいじる'},
+  {t:0,n:'冒険者', c:()=>true, d:'平均的な能力。成長余地が大きい'},
+];
+
+/* ===== Tier1 職業スキル（確定） ===== */
+const SKILLS = {
+  '戦士':[
+    {n:'パワースラッシュ', mp:4, d:'STR×1.4 物理', use:g=>g.hitP(1.4,'パワースラッシュ')},
+    {n:'渾身の一撃', mp:8, d:'STR×1.8 物理', use:g=>g.hitP(1.8,'渾身の一撃')},
+    {n:'挑発の構え', mp:3, d:'1T 被物理-40%', use:g=>{g.playerEff.physCut={v:40,t:1}; g.log('どっしりと構えた。被物理ダメージ-40%','t-gold');}},
+    {n:'雄叫び', mp:5, d:'3T 物理攻撃+20%', use:g=>{g.playerEff.atkUp={v:20,t:3}; g.log('雄叫びを上げた！ 攻撃+20%','t-gold');}},
+  ],
+  '魔法使い':[
+    {n:'ファイアボルト', mp:6, d:'INT×1.6 魔法', use:g=>g.hitM(1.6,'ファイアボルト')},
+    {n:'ブリザード', mp:12, d:'INT×2.2 魔法 + 敵攻撃-10%(1T)', use:g=>{g.hitM(2.2,'ブリザード'); if(g.enemy.hp>0){g.enemyEff.atkDown={v:10,t:1}; g.log('敵は凍えている。攻撃-10%','t-gold');}}},
+    {n:'マナシールド', mp:4, d:'2T 被ダメの50%をMPで肩代わり', use:g=>{g.playerEff.manaShield={t:2}; g.log('魔力の盾を張った','t-mp');}},
+    {n:'集中', mp:5, d:'次の魔法ダメージ+50%', use:g=>{g.playerEff.focus=true; g.log('精神を集中する……次の魔法+50%','t-gold');}},
+  ],
+  '僧侶':[
+    {n:'錫杖打ち', mp:4, d:'STR×1.3 物理', use:g=>g.hitP(1.3,'錫杖打ち')},
+    {n:'断罪の光', mp:8, d:'INT×1.7 魔法', use:g=>g.hitM(1.7,'断罪の光')},
+    {n:'ヒール', mp:8, d:'HP回復 VIT×3', use:g=>g.heal(g.st.VIT*3,'ヒール')},
+    {n:'守りの祈り', mp:5, d:'2T 被ダメージ-25%', use:g=>{g.playerEff.allCut={v:25,t:2}; g.log('祈りが体を包む。被ダメージ-25%','t-gold');}},
+  ],
+  '盗賊':[
+    {n:'不意打ち', mp:4, d:'STR×1.3 物理・会心+30%', use:g=>g.hitP(1.3,'不意打ち',30)},
+    {n:'毒刃', mp:6, d:'INT×1.3 魔法 + 毒(2T)', use:g=>{g.hitM(1.3,'毒刃'); if(g.enemy.hp>0){g.enemyEff.poison={t:2}; g.log('敵は毒に侵された','t-gold');}}},
+    {n:'煙玉', mp:5, d:'2T 回避+40%', use:g=>{g.playerEff.evadeUp={v:40,t:2}; g.log('煙に紛れた。回避+40%','t-gold');}},
+    {n:'盗む', mp:3, d:'敵からアイテムを盗む(戦闘中1回)', use:g=>{ if(g.stoleThisBattle){g.log('もう盗めるものはない','t-dim'); return;} g.stoleThisBattle=true; g.addItem(Math.random()<0.6?'回復薬':'マナの水'); }},
+  ],
+  '吟遊詩人':[
+    {n:'挑発のセレナーデ', mp:5, d:'STR×1.3 物理 + 敵防御-20%(2T)', use:g=>{g.hitP(1.3,'挑発のセレナーデ'); if(g.enemy.hp>0){g.enemyEff.defDown={v:20,t:2}; g.log('挑発が刺さった。敵の防御-20%','t-gold');}}},
+    {n:'魂を喰む歌', mp:4, d:'INT×1.1 魔法・与ダメの50%MP回復', use:g=>{const d=g.hitM(1.1,'魂を喰む歌'); g.gainMP(Math.round(d*0.5),'魂の歌');}},
+    {n:'不協和音', mp:5, d:'2T 敵攻撃-20%', use:g=>{g.enemyEff.atkDown={v:20,t:2}; g.log('不協和音が響く。敵の攻撃-20%','t-gold');}},
+    {n:'静寂の休符', mp:8, d:'2T 敵はスキルを使えない', use:g=>{g.enemyEff.silence={t:2}; g.log('静寂が敵を包んだ。スキル封印(2T)','t-gold');}},
+  ],
+};
+const GENERIC_SKILLS = [
+  {n:'がむしゃら', mp:4, d:'STR×1.4 物理（汎用・仮）', use:g=>g.hitP(1.4,'がむしゃら')},
+  {n:'ひらめき', mp:6, d:'INT×1.4 魔法（汎用・仮）', use:g=>g.hitM(1.4,'ひらめき')},
+  {n:'深呼吸', mp:6, d:'HP回復 VIT×2（汎用・仮）', use:g=>g.heal(g.st.VIT*2,'深呼吸')},
+  {n:'身構える', mp:3, d:'1T 被ダメージ-25%（汎用・仮）', use:g=>{g.playerEff.allCut={v:25,t:1}; g.log('身構えた。被ダメージ-25%','t-gold');}},
+];
+
+/* ===== 敵（能力値は仮） ===== */
+const FOES = [
+  {n:'スライム', f:'🟢', min:1, s:f=>({STR:6+4*f, INT:2, VIT:5+3*f, DEX:4, MND:2})},
+  {n:'洞窟コウモリ', f:'🦇', min:1, s:f=>({STR:5+4*f, INT:2, VIT:4+2*f, DEX:12+2*f, MND:2})},
+  {n:'ゴブリン', f:'👺', min:2, s:f=>({STR:9+5*f, INT:3, VIT:7+3*f, DEX:8, MND:3})},
+  {n:'魔導コケ', f:'🍄', min:2, s:f=>({STR:4, INT:9+5*f, VIT:6+3*f, DEX:4, MND:8+2*f}), type:'mag'},
+  {n:'骸骨剣士', f:'💀', min:3, s:f=>({STR:12+5*f, INT:4, VIT:9+3*f, DEX:10, MND:4})},
+  {n:'呪術師', f:'🧙', min:4, s:f=>({STR:6, INT:14+5*f, VIT:8+3*f, DEX:8, MND:10+2*f}), type:'mag',
+   skill:{n:'呪縛の詠唱', every:2, mult:1.8}},
+];
+const BOSS = {n:'月曜の影', f:'🌑', s:()=>({STR:36, INT:36, VIT:52, DEX:14, MND:28}),
+  skill:{n:'絶望の宣告', every:3, mult:2.0, mag:true}, boss:true};
+const FLOORS = 7; // 6フロア + ボス
+
+/* ===== 状態 ===== */
+let W, G;
+const $ = id => document.getElementById(id);
+const show = id => { document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on')); $(id).classList.add('on'); window.scrollTo({top:0}); };
+
+/* ===== メッセージシステム（ポケモン風・1通ずつ） ===== */
+const MSG = {q:[], busy:false, chars:[], pos:0, timer:null, auto:null, onDone:null};
+function flattenMsg(html){
+  const t=document.createElement('div'); t.innerHTML=html;
+  const out=[];
+  (function walk(n, cls){
+    n.childNodes.forEach(c=>{
+      if(c.nodeType===3){ [...c.textContent].forEach(ch=>out.push([ch,cls])); }
+      else walk(c, c.className||cls);
+    });
+  })(t,'');
+  return out;
+}
+function renderMsg(){
+  $('msg-text').innerHTML = MSG.chars.slice(0,MSG.pos)
+    .map(([ch,cls])=>cls?`<span class="${cls}">${ch}</span>`:ch).join('');
+}
+function say(html, cls){
+  MSG.q.push(cls?`<span class="${cls}">${html}</span>`:html);
+  if(!MSG.busy) nextMsg();
+}
+function nextMsg(){
+  clearTimeout(MSG.auto); clearInterval(MSG.timer);
+  $('msgbox').classList.remove('wait');
+  const m = MSG.q.shift();
+  if(m===undefined){
+    MSG.busy=false;
+    const cb=MSG.onDone; MSG.onDone=null; if(cb) cb();
+    return;
+  }
+  MSG.busy=true;
+  MSG.chars=flattenMsg(m); MSG.pos=0; renderMsg();
+  MSG.timer=setInterval(()=>{
+    MSG.pos=Math.min(MSG.chars.length, MSG.pos+2);
+    renderMsg();
+    if(MSG.pos>=MSG.chars.length){ clearInterval(MSG.timer); msgTyped(); }
+  }, 18);
+}
+function msgTyped(){
+  $('msgbox').classList.add('wait');
+  MSG.auto=setTimeout(nextMsg, 1150);
+}
+function msgAdvance(){
+  if(!MSG.busy) return;
+  if(MSG.pos<MSG.chars.length){
+    clearInterval(MSG.timer);
+    MSG.pos=MSG.chars.length; renderMsg(); msgTyped();
+  } else nextMsg();
+}
+function waitMsgs(cb){
+  if(!MSG.busy && MSG.q.length===0){ cb(); return; }
+  MSG.onDone=cb;
+}
+
+/* ===== 演出ヘルパー ===== */
+function fxc(el, cls, ms){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); setTimeout(()=>el.classList.remove(cls), ms||500); }
+function popup(x, y, text, cls){
+  const p=document.createElement('span'); p.className='pop '+(cls||'');
+  p.innerHTML=text; p.style.left=x+'%'; p.style.top=y+'%';
+  $('popups').appendChild(p); setTimeout(()=>p.remove(), 950);
+}
+const popE=(t,c)=>popup(58+Math.random()*10, 26+Math.random()*10, t, c);
+const popH=(t,c)=>popup(13+Math.random()*7, 44+Math.random()*10, t, c);
+function heroFace(){
+  if(picked.t===5) return '👑';
+  if(picked.t===4) return '🦸';
+  const map={戦士:'🤺',魔法使い:'🧙',僧侶:'🧑‍🦲',盗賊:'🥷',吟遊詩人:'🧝'};
+  if(map[picked.n]) return map[picked.n];
+  const s=W.stats; const top=CATS.slice().sort((a,b)=>s[b.k]-s[a.k])[0].k;
+  return {STR:'🤺',INT:'🧙',VIT:'🛡️',DEX:'🥷',MND:'🧝'}[top];
+}
+function showEvent(icon){
+  const f=$('enemy-face'); f.className='sprite enemy evt'; f.textContent=icon;
+  $('scene').classList.remove('bossbg');
+  $('enemy-window').style.display='none';
+}
+
+function newWeek(){
+  W = { day:1, stats:{STR:0,INT:0,VIT:0,DEX:0,MND:0}, today:{STR:0,INT:0,VIT:0,DEX:0,MND:0},
+        weekCount:{STR:0,INT:0,VIT:0,DEX:0,MND:0}, snapshot:null, totalTasks:0 };
+  saveDaySnapshot();
+  renderPlan();
+  show('sc-plan');
+}
+function saveDaySnapshot(){ W.snapshot = JSON.stringify({stats:W.stats, weekCount:W.weekCount, totalTasks:W.totalTasks}); }
+function doTask(k){
+  const n = W.today[k];
+  if(n>=3) return;
+  const gain = Math.round(baseGain(W.stats[k]) * DAY_MULT[n]);
+  W.stats[k] = Math.min(80, W.stats[k]+gain);
+  W.today[k]++; W.weekCount[k]++; W.totalTasks++;
+  renderPlan();
+}
+function nextDay(){
+  if(W.day>=7){ finishWeek(); return; }
+  W.day++;
+  W.today = {STR:0,INT:0,VIT:0,DEX:0,MND:0};
+  saveDaySnapshot();
+  renderPlan();
+}
+function redoDay(){
+  const s = JSON.parse(W.snapshot);
+  W.stats = s.stats; W.weekCount = s.weekCount; W.totalTasks = s.totalTasks;
+  W.today = {STR:0,INT:0,VIT:0,DEX:0,MND:0};
+  renderPlan();
+}
+const DAYNAMES=['月曜日','火曜日','水曜日','木曜日','金曜日','土曜日','日曜日'];
+function renderPlan(){
+  $('day-title').textContent = `${W.day}日目（${DAYNAMES[W.day-1]}）`;
+  $('btn-next-day').textContent = W.day>=7 ? '日曜終了 — 集計する ▸' : '次の日へ ▸';
+  $('day-dots').innerHTML = Array.from({length:7},(_,i)=>
+    `<span class="${i+1<W.day?'done':i+1===W.day?'now':''}"></span>`).join('');
+  $('cat-rows').innerHTML = CATS.map(c=>{
+    const v=W.stats[c.k], t=W.today[c.k];
+    const nextGain = t<3 ? Math.round(baseGain(v)*DAY_MULT[t]) : 0;
+    return `<div class="cat-row">
+      <div class="cat-name" style="color:${c.color}">${c.k}<small>${c.cat}</small></div>
+      <div><div class="statbar"><i style="background:${c.color};width:${v/80*100}%"></i><b class="num">${v}</b></div></div>
+      <div class="today">
+        <div class="pips">${[0,1,2].map(i=>`<span class="${i<t?'hit':''}"></span>`).join('')}</div>
+        <button data-cat="${c.k}" ${t>=3?'disabled':''}>タスク完了${t<3?` <span class="num">+${nextGain}</span>`:''}</button>
+      </div></div>`;
+  }).join('');
+  $('cat-rows').querySelectorAll('button[data-cat]').forEach(b=>b.onclick=()=>doTask(b.dataset.cat));
+  const elig = JOBS.filter(j=>j.t>0 && j.c(W.stats));
+  const top = elig.slice().sort((a,b)=>b.t-a.t).slice(0,4).map(j=>`${j.n}(T${j.t})`);
+  $('preview-jobs').textContent = '職業候補: ' + (top.length?top.join('、')+(elig.length>4?` ほか${elig.length-4}件`:''):'冒険者のみ');
+  const cmds = CATS.flatMap(c=>{
+    const n=W.weekCount[c.k]; const out=[];
+    if(n>=1) out.push(TASKCMDS[c.k][0].n);
+    if(n>=3) out.push(TASKCMDS[c.k][1].n);
+    return out;
+  });
+  $('preview-cmds').textContent = '解禁コマンド: ' + (cmds.length?cmds.join('、'):'なし');
+}
+
+/* ===== 集計・職業選択 ===== */
+function enhPct(n){ return n>=4?6 : n===3?5 : n===2?3 : 0; }
+function finishWeek(){
+  $('final-stats').innerHTML = CATS.map(c=>
+    `<dt>${c.k}（${c.cat}）</dt><dd class="num" style="color:${c.color}">${W.stats[c.k]}</dd>`).join('')
+    + `<dt>完了タスク</dt><dd class="num">${W.totalTasks}件</dd>`;
+  const elig = JOBS.filter(j=>j.c(W.stats)).sort((a,b)=>b.t-a.t);
+  $('job-list').innerHTML = elig.map((j,i)=>
+    `<button class="job-card" data-i="${i}">
+      <span class="tier">TIER ${j.t}</span> <span class="jname">${j.n}</span>
+      ${SKILLS[j.n]?'':'<span class="badge">スキル仮</span>'}
+      <div class="jdesc">${j.d}</div></button>`).join('');
+  $('job-list').querySelectorAll('button').forEach(b=>b.onclick=()=>pickJob(elig[+b.dataset.i]));
+  show('sc-job');
+}
+let picked, cmdRows=[], eqSel=[];
+const EQUIP_MAX = 2; // パーク「戦術の心得」で3に拡張（未実装）
+function renderCmdSelect(){
+  $('ready-cmds').innerHTML = cmdRows.length
+    ? '<tr><th>装備</th><th>コマンド</th><th>効果</th><th>強化</th></tr>' +
+      cmdRows.map((r,i)=>`<tr>
+        <td><button data-eq="${i}" class="${eqSel.includes(i)?'primary':''}" style="padding:2px 10px">${eqSel.includes(i)?'✔ 装備':'—'}</button></td>
+        <td style="color:${r.c.color}">${r.cmd.n}</td><td>${r.cmd.d}</td><td class="num">+${enhPct(r.n)}%</td></tr>`).join('')
+    : '<tr><td class="sub">なし — 職業スキルだけで戦うことになる。</td></tr>';
+  $('ready-cmds').querySelectorAll('button[data-eq]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.eq;
+    if(eqSel.includes(i)) eqSel = eqSel.filter(x=>x!==i);
+    else { eqSel.push(i); if(eqSel.length>EQUIP_MAX) eqSel.shift(); }
+    renderCmdSelect();
+  });
+}
+function pickJob(job){
+  picked = job;
+  const s = W.stats;
+  $('ready-title').textContent = `${job.n} — 今週のキャラクター`;
+  $('ready-stats').innerHTML =
+    CATS.map(c=>`<dt>${c.k}</dt><dd class="num" style="color:${c.color}">${s[c.k]}</dd>`).join('') +
+    `<dt>HP</dt><dd class="num">${maxHP(s)}</dd><dt>MP</dt><dd class="num">${maxMP(s)}</dd>
+     <dt>DEF</dt><dd class="num">${DEF(s)}</dd><dt>RES</dt><dd class="num">${RES(s)}</dd>`;
+  const skills = SKILLS[job.n] || GENERIC_SKILLS;
+  $('ready-skills').innerHTML = '<tr><th>スキル</th><th>効果</th><th>MP</th></tr>' +
+    skills.map(k=>`<tr><td>${k.n}</td><td>${k.d}</td><td class="num">${k.mp}</td></tr>`).join('');
+  const noteEl = $('ready-skill-note');
+  if(!SKILLS[job.n]){ noteEl.style.display='block'; noteEl.textContent='この職業の固有スキルは未設計のため、汎用スキル（仮）で出撃します。'; }
+  else noteEl.style.display='none';
+  cmdRows = CATS.flatMap(c=>{
+    const n=W.weekCount[c.k]; const out=[];
+    if(n>=1) out.push({c, cmd:TASKCMDS[c.k][0], n});
+    if(n>=3) out.push({c, cmd:TASKCMDS[c.k][1], n});
+    return out;
+  });
+  eqSel = cmdRows.slice(0, EQUIP_MAX).map((_,i)=>i);
+  renderCmdSelect();
+  show('sc-ready');
+}
+
+/* ===== ダンジョン ===== */
+function depart(){
+  const s = {...W.stats};
+  G = {
+    st:s, hp:maxHP(s), mp:maxMP(s), floor:0, points:0, kills:0,
+    items:{'回復薬':1,'マナの水':0}, // 初期支給1個（仮）
+    skills: SKILLS[picked.n] || GENERIC_SKILLS,
+    taskCmds: eqSel.map(i=>cmdRows[i]),
+    log:(m,cls)=>say(m,cls),
+  };
+  MSG.q.length=0; MSG.busy=false; MSG.onDone=null;
+  $('msg-text').innerHTML='';
+  $('hero-sp').textContent = heroFace();
+  const f=$('enemy-face'); f.className='sprite enemy'; f.textContent='';
+  $('enemy-window').style.display='none';
+  $('scene').classList.remove('bossbg');
+  G.log(`${picked.n}はダンジョンに足を踏み入れた……`,'t-gold');
+  show('sc-dungeon');
+  nextFloor();
+}
+function hudUpdate(){
+  const mh=maxHP(G.st), mm=maxMP(G.st);
+  $('hp-num').textContent=`${G.hp} / ${mh}`; $('mp-num').textContent=`${G.mp} / ${mm}`;
+  $('hp-bar').style.width=(G.hp/mh*100)+'%'; $('mp-bar').style.width=(G.mp/mm*100)+'%';
+  $('floor-label').textContent = G.floor>=FLOORS ? 'ボスフロア' : `フロア ${G.floor} / ${FLOORS-1}`;
+  $('point-label').textContent = `pt ${G.points}`;
+}
+function setCmds(list){
+  $('cmds').innerHTML = list.map((c,i)=>
+    `<button data-i="${i}" ${c.dis?'disabled':''}>${c.label}${c.sub?`<small>${c.sub}</small>`:''}</button>`).join('');
+  $('cmds').querySelectorAll('button').forEach(b=>b.onclick=()=>list[+b.dataset.i].fn());
+}
+function nextFloor(){
+  G.floor++;
+  hudUpdate();
+  if(G.floor>=FLOORS){ startBattle(BOSS); return; }
+  const r = Math.random();
+  if(r<0.60) {
+    const pool = FOES.filter(f=>f.min<=G.floor);
+    startBattle(pool[Math.floor(Math.random()*pool.length)]);
+  } else if(r<0.75){
+    const item = Math.random()<0.6?'回復薬':'マナの水';
+    G.items[item]++;
+    showEvent('🎁');
+    G.log(`宝箱を見つけた！ ${item} を手に入れた。`,'t-gold');
+    afterFloorMenu(false);
+  } else if(r<0.85){
+    const d = Math.round(maxHP(G.st)*0.12);
+    G.hp=Math.max(1,G.hp-d);
+    showEvent('💥');
+    fxc($('scene'),'shakefx',450); popH(d,'dmg');
+    G.log(`罠だ！ ${d} のダメージを受けた。`,'t-dmg');
+    hudUpdate(); afterFloorMenu(false);
+  } else {
+    const h=Math.round(maxHP(G.st)*0.3), m=Math.round(maxMP(G.st)*0.2);
+    G.hp=Math.min(maxHP(G.st),G.hp+h); G.mp=Math.min(maxMP(G.st),G.mp+m);
+    showEvent('🏕️');
+    popH('+'+h,'heal');
+    G.log(`休憩所を見つけた。HP+${h} / MP+${m} 回復した。`,'t-heal');
+    hudUpdate(); afterFloorMenu(false);
+  }
+}
+function afterFloorMenu(fromBattle){
+  if(fromBattle){
+    const h=Math.round(G.st.VIT*1.0), m=Math.round(G.st.MND*0.5);
+    G.hp=Math.min(maxHP(G.st),G.hp+h); G.mp=Math.min(maxMP(G.st),G.mp+m);
+    if(h||m) G.log(`一息ついた。自然回復 HP+${h} / MP+${m}`,'t-heal');
+    G.points+=10;
+  }
+  hudUpdate();
+  $('enemy-window').style.display='none';
+  setCmds([]);
+  waitMsgs(()=>setCmds([{label:'▸ 次のフロアへ進む', fn:nextFloor}]));
+}
+
+/* ===== バトル ===== */
+function startBattle(tpl){
+  const es = tpl.s(G.floor);
+  G.enemy = { tpl, st:es, hp: tpl.boss? es.VIT*6+150 : es.VIT*4+30, name:tpl.n, turn:0 };
+  G.enemy.maxhp = G.enemy.hp;
+  G.playerEff={}; G.enemyEff={}; G.usedCmds=new Set(); G.firedCombos=new Set(); G.stoleThisBattle=false;
+  const f=$('enemy-face'); f.className='sprite enemy'; f.textContent=tpl.f;
+  $('scene').classList.toggle('bossbg', !!tpl.boss);
+  $('enemy-window').style.display='block';
+  $('enemy-name').textContent=tpl.n;
+  $('enemy-tags').textContent=`STR ${es.STR} / INT ${es.INT} / DEF ${DEF(es)} / RES ${RES(es)}`;
+  G.log(`${tpl.n} があらわれた！`, tpl.boss?'t-gold':'');
+  drawEnemyHP();
+  setCmds([]);
+  waitMsgs(battleMenu);
+}
+function drawEnemyHP(){ $('ehp-bar').style.width=Math.max(0,G.enemy.hp/G.enemy.maxhp*100)+'%'; }
+function eff(o,k){ return o[k] && o[k].t>0 ? o[k].v||true : (o[k]===true?true:0); }
+function bindHelpers(){
+  G.enh = k => 1 + enhPct(W.weekCount[k])/100;
+  G.hitP = (mult, label, critBonus=0) => {
+    let def = DEF(G.enemy.st) * (1 - (eff(G.enemyEff,'defDown')||0)/100);
+    let m = mult * (1 + (eff(G.playerEff,'atkUp')||0)/100);
+    let d = dmgCalc(G.st.STR, def, m);
+    const critP = Math.min(60, 5 + G.st.DEX*0.5 + critBonus);
+    const crit = Math.random()*100 < critP;
+    if(crit) d = Math.round(d*1.5);
+    G.enemy.hp -= d;
+    fxc($('hero-sp'),'lunge',450); fxc($('enemy-face'),'hitfx',480);
+    popE(d, crit?'crit':'');
+    G.log(`${label}！ ${crit?'<span class="t-gold">会心！</span> ':''}敵に <span class="t-dmg">${d}</span> のダメージ`);
+    drawEnemyHP(); return d;
+  };
+  G.hitM = (mult, label) => {
+    let res = RES(G.enemy.st) * (1 - (eff(G.enemyEff,'defDown')||0)/100);
+    let m = mult;
+    if(G.playerEff.focus){ m*=1.5; G.playerEff.focus=false; G.log('集中の効果！','t-gold'); }
+    let d = dmgCalc(G.st.INT, res, m);
+    G.enemy.hp -= d;
+    fxc($('hero-sp'),'lunge',450); fxc($('enemy-face'),'hitfx',480);
+    popE(d,'mag');
+    G.log(`${label}！ 敵に <span class="t-dmg">${d}</span> の魔法ダメージ`);
+    drawEnemyHP(); return d;
+  };
+  G.heal = (amt, label) => { amt=Math.round(amt); G.hp=Math.min(maxHP(G.st),G.hp+amt); popH('+'+amt,'heal'); G.log(`${label}！ HPが <span class="t-heal">${amt}</span> 回復`,''); hudUpdate(); };
+  G.gainMP = (amt, label) => { G.mp=Math.min(maxMP(G.st),G.mp+amt); popH('+'+amt,'mp'); G.log(`${label}。MPが <span class="t-mp">${amt}</span> 回復`); hudUpdate(); };
+  G.addItem = name => { G.items[name]=(G.items[name]||0)+1; G.log(`${name} を手に入れた！`,'t-gold'); };
+}
+function battleMenu(){
+  bindHelpers();
+  const cmds=[];
+  const magBasic = G.st.INT > G.st.STR;
+  cmds.push({label:magBasic?'⚔ 攻撃（魔弾）':'⚔ 攻撃（斬撃）', sub:'通常攻撃 ×0.7（MP0・高い方の攻撃ステを参照）',
+    fn:()=>playerAct(()=> magBasic ? G.hitM(0.7,'魔弾') : G.hitP(0.7,'攻撃'))});
+  G.skills.forEach(k=>{
+    cmds.push({label:k.n, sub:`${k.d} <span class="cost">MP${k.mp}</span>`, dis:G.mp<k.mp,
+      fn:()=>playerAct(()=>{ G.mp-=k.mp; hudUpdate(); k.use(G); })});
+  });
+  (G.taskCmds||[]).forEach(r=>{
+    const cmd=r.cmd;
+    const used=G.usedCmds.has(cmd.n);
+    cmds.push({label:`◆ ${cmd.n}`, sub:used?'使用済み':`${cmd.d}（1戦1回）`, dis:used,
+      fn:()=>playerAct(()=>{ G.usedCmds.add(cmd.n); cmd.use(G); checkCombos(cmd.n); })});
+  });
+  Object.entries(G.items).forEach(([name,ct])=>{
+    if(ct<=0) return;
+    cmds.push({label:`🧪 ${name} ×${ct}`, sub:name==='回復薬'?'HP+120':'MP+40',
+      fn:()=>playerAct(()=>{ G.items[name]--; if(name==='回復薬') G.heal(120,'回復薬'); else G.gainMP(40,'マナの水'); })});
+  });
+  cmds.push({label:'💨 逃げる', sub:`成功率 ${escapeChance()}%`, dis:G.enemy.tpl.boss,
+    fn:()=>{ setCmds([]); if(Math.random()*100<escapeChance()){ G.log('うまく逃げ切った！','t-gold'); showEvent('💨'); afterFloorMenu(false); } else { G.log('回り込まれてしまった！','t-dmg'); enemyTurn(); } }});
+  setCmds(cmds);
+}
+function escapeChance(){ return Math.min(95, Math.round(40 + G.st.DEX*0.75)); }
+function checkCombos(justUsed){
+  COMBOS.forEach(cb=>{
+    if(G.firedCombos.has(cb.n)) return;
+    if(G.usedCmds.has(cb.a) && G.usedCmds.has(cb.b) && (justUsed===cb.a||justUsed===cb.b)){
+      G.firedCombos.add(cb.n);
+      G.log(`✦ コンボ発動 — ${cb.n}！`,'t-gold');
+      cb.fire(G);
+    }
+  });
+}
+function playerAct(fn){
+  setCmds([]);
+  fn();
+  waitMsgs(()=>{
+    if(G.enemy.hp<=0){ winBattle(); return; }
+    enemyTurn();
+  });
+}
+function enemyTurn(){
+  const e=G.enemy, es=e.st;
+  if(G.enemyEff.poison && G.enemyEff.poison.t>0){
+    const pd=Math.max(1,Math.round(G.st.INT*0.4));
+    e.hp-=pd; popE(pd,'mag');
+    G.log(`毒が ${e.name} を蝕む。<span class="t-dmg">${pd}</span> ダメージ`,'t-dim');
+    drawEnemyHP();
+    if(e.hp<=0){ winBattle(); return; }
+  }
+  e.turn++;
+  const tpl=e.tpl;
+  const silenced = G.enemyEff.silence && G.enemyEff.silence.t>0;
+  let mag = tpl.type==='mag';
+  let mult=1.0, label=`${e.name}の攻撃`;
+  if(tpl.skill && !silenced && e.turn % tpl.skill.every === 0){
+    mult=tpl.skill.mult; label=`${e.name}の${tpl.skill.n}`; mag = tpl.skill.mag!==undefined?tpl.skill.mag:mag;
+    G.log(`${e.name} は力を溜めて——`,'t-dim');
+  } else if(tpl.skill && silenced && e.turn % tpl.skill.every === 0){
+    G.log(`${e.name} はスキルを封じられている！`,'t-gold');
+  }
+  fxc($('enemy-face'),'elunge',450);
+  const evade = Math.min(75, G.st.DEX*0.4 + (eff(G.playerEff,'evadeUp')||0));
+  if(Math.random()*100 < evade){
+    popH('MISS','miss');
+    G.log(`${label}！ しかし ${picked.n} はひらりとかわした`,'t-gold');
+  } else {
+    const atkStat = mag? es.INT : es.STR;
+    const atkDown = 1 - (eff(G.enemyEff,'atkDown')||0)/100;
+    const defv = mag? RES(G.st) : DEF(G.st);
+    let d = dmgCalc(atkStat*atkDown, defv, mult);
+    if(Math.random()<0.05) { d=Math.round(d*1.5); label+='（会心）'; }
+    let cut = (eff(G.playerEff,'allCut')||0) + (!mag ? (eff(G.playerEff,'physCut')||0) : 0);
+    if(cut) d = Math.round(d*(1-Math.min(75,cut)/100));
+    if(G.playerEff.manaShield && G.playerEff.manaShield.t>0 && G.mp>0){
+      const toMp = Math.min(G.mp, Math.round(d*0.5));
+      G.mp-=toMp; d-=toMp;
+      G.log(`魔力の盾が ${toMp} を肩代わり`,'t-mp');
+    }
+    G.hp-=d;
+    fxc($('scene'),'shakefx',450); popH(d,'dmg');
+    G.log(`${label}！ <span class="t-dmg">${d}</span> のダメージを受けた`);
+    hudUpdate();
+    if(G.hp<=0){ lose(); return; }
+  }
+  tickEffects();
+  waitMsgs(battleMenu);
+}
+function tickEffects(){
+  [G.playerEff, G.enemyEff].forEach(o=>{
+    Object.keys(o).forEach(k=>{
+      if(o[k] && typeof o[k]==='object' && 't' in o[k]){ o[k].t--; if(o[k].t<=0) delete o[k]; }
+    });
+  });
+}
+function winBattle(){
+  const boss=G.enemy.tpl.boss;
+  G.kills++;
+  $('enemy-face').classList.add('die');
+  G.log(`${G.enemy.name} を倒した！`,'t-gold');
+  if(boss){ G.points+=50; waitMsgs(()=>setTimeout(()=>finish(true), 400)); return; }
+  afterFloorMenu(true);
+}
+function lose(){ waitMsgs(()=>setTimeout(()=>finish(false), 400)); }
+function finish(win){
+  $('result-title').textContent = win? 'DUNGEON CLEAR' : `${picked.n} は力尽きた`;
+  $('result-title').className = 'result-big ' + (win?'win':'lose');
+  $('result-sub').textContent = win
+    ? 'ボスを討伐した。キャラクターは役目を終えて消滅する。'
+    : `フロア${G.floor}で倒れた。キャラクターは消滅する。`;
+  $('result-kv').innerHTML = `
+    <dt>職業</dt><dd>${picked.n}（Tier ${picked.t}）</dd>
+    <dt>今週の完了タスク</dt><dd class="num">${W.totalTasks}件</dd>
+    <dt>到達フロア</dt><dd class="num">${G.floor} / ${FLOORS}</dd>
+    <dt>撃破数</dt><dd class="num">${G.kills}体</dd>
+    <dt>獲得攻略ポイント</dt><dd class="num" style="color:var(--gold)">${G.points} pt</dd>`;
+  show('sc-result');
+}
+
+/* ===== プリセット ===== */
+const PRESETS = {
+  str: ()=>CATS.map(c=>({STR:3, VIT:1}[c.k]||0)),
+  int: ()=>CATS.map(c=>({INT:3, MND:1}[c.k]||0)),
+  bal: ()=>CATS.map(()=>1),
+  hard:()=>CATS.map(()=>3),
+  rand:()=>CATS.map(()=>Math.floor(Math.random()*4)),
+};
+function runPreset(key){
+  newWeekSilent();
+  for(let d=1; d<=7; d++){
+    const plan = PRESETS[key]();
+    CATS.forEach((c,i)=>{ for(let t=0;t<plan[i];t++) doTaskSilent(c.k); });
+    if(d<7){ W.day++; W.today={STR:0,INT:0,VIT:0,DEX:0,MND:0}; }
+  }
+  finishWeek();
+}
+function newWeekSilent(){
+  W = { day:1, stats:{STR:0,INT:0,VIT:0,DEX:0,MND:0}, today:{STR:0,INT:0,VIT:0,DEX:0,MND:0},
+        weekCount:{STR:0,INT:0,VIT:0,DEX:0,MND:0}, snapshot:null, totalTasks:0 };
+}
+function doTaskSilent(k){
+  const n=W.today[k]; if(n>=3) return;
+  const gain=Math.round(baseGain(W.stats[k])*DAY_MULT[n]);
+  W.stats[k]=Math.min(80,W.stats[k]+gain);
+  W.today[k]++; W.weekCount[k]++; W.totalTasks++;
+}
+
+/* ===== 配線 ===== */
+$('msgbox').onclick = msgAdvance;
+$('scene').onclick = msgAdvance;
+addEventListener('keydown', e=>{ if(e.key===' '||e.key==='Enter'){ if(MSG.busy){ e.preventDefault(); msgAdvance(); } } });
+$('btn-next-day').onclick = nextDay;
+$('btn-redo-day').onclick = redoDay;
+$('btn-depart').onclick = depart;
+$('btn-retry').onclick = newWeek;
+document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>runPreset(b.dataset.preset));
+newWeek();
+</script>
+</body>
+</html>
