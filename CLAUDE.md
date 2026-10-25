@@ -30,7 +30,10 @@ Claude Codeがこのリポジトリを理解するためのガイド。ゲーム
 /
 ├── CLAUDE.md       # このファイル
 ├── docs/
-│   └── SPEC.md     # ゲーム仕様書（設計の源泉）
+│   ├── SPEC.md     # ゲーム仕様書（設計の源泉）
+│   └── PROGRESS.md # 進捗・決定ログ・次にやること
+├── prototype/
+│   └── weekend-dungeon.html  # 遊べる検証用プロトタイプ（単一HTML）
 ├── main.py         # 既存スクリプト（OCR関連）
 ├── ocrClass.py
 └── hit_api.py
@@ -42,6 +45,9 @@ Claude Codeがこのリポジトリを理解するためのガイド。ゲーム
 
 ## 開発ルール
 
+- セッション開始時は `docs/PROGRESS.md` で現在地を確認する
 - 仕様変更は必ず `docs/SPEC.md` に反映してからコードに落とす
+- 決定したことは `docs/PROGRESS.md` の決定ログと「現在地」を更新する
+- プロトタイプは SPEC 準拠。SPEC 未確定の値はプロトタイプ内で「仮」と明示する
 - ★マークは仮置き値。バランス確定後に更新する
 - Claude APIはタスクカテゴリ自動判別にのみ使用する
