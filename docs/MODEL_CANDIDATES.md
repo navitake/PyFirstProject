@@ -84,6 +84,27 @@
 
 ---
 
+## 端末の中で動かすモデル（PC・スマホそれぞれで実行）
+
+LLMをサーバではなく、使っている端末の中で動かす方法。料金がかからず、タスクの内容が端末の外に出ない。
+確認画面でユーザーが確定した結果だけをサーバに送るので、**サーバから見ればどこで解析したかは関係ない**（今の作りと両立する）。
+
+| 端末 | 使えるもの | 形式の強制 | 日本語 | 条件・状態（2026-10 時点） |
+|---|---|---|---|---|
+| iPhone（ネイティブアプリ） | Apple の Foundation Models（端末内の約3Bモデル） | ○（guided generation） | ○（提供開始時から対応） | iOS 26 以降、Apple Intelligence 対応機種。入力と出力の合計が約4Kトークンまで（タスク解析には十分） |
+| Android（ネイティブアプリ） | ML Kit GenAI Prompt API（Gemini Nano） | 要確認 | 端末と入っているモデル次第 | **アルファ版**。対応機種が限られる（Pixel 9・10、一部の Xiaomi・Galaxy など） |
+| PC（ブラウザ） | Chrome の内蔵AI（Gemini Nano） | ○（JSON スキーマ指定） | 要確認 | 4GB超のビデオメモリ、または16GBメモリ＋4コア以上、空き容量約22GB。**一般のWebサイトから使えるかは公式情報で確認できず** |
+| PC・スマホ（ブラウザ） | WebLLM など（WebGPU で Qwen などを実行） | ○ | モデル次第 | iPhone の Safari も iOS 26 から WebGPU が標準で有効。ただしモデルの初回ダウンロードが数GBで、スマホではメモリ不足で止まる恐れがある（実測情報なし） |
+
+**まとめ**
+
+- 端末の中で動かす方法は、**ネイティブアプリで本領を発揮する**。iPhone は条件を満たせば無料・高速・日本語対応で使える
+- **Webアプリの段階では使える端末が限られる**（PCのChromeは見込みあり、スマホのブラウザは重い）
+- 端末によって使えるモデルが違うので、どの端末でも同じ質になるとは限らない。比較テストでは端末内のモデルも一緒に測る
+- 使えない端末（古い機種など）のために、**サーバ側の解析（API または自前のモデル）か手入力に切り替える**仕組みが要る
+
+---
+
 ## 出典
 
 - [Claude のモデルと料金](https://platform.claude.com/docs/en/models/overview)（Haiku 5.5: 入力 $0.10 / 出力 $0.50）／[API のデータ保持](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention)／[学習への利用について](https://privacy.anthropic.com/en/articles/7996868-i-want-to-opt-out-of-my-prompts-and-results-being-used-for-training-models)
@@ -91,3 +112,4 @@
 - [Gemini API の料金（無料枠と有料枠のデータの扱いを含む）](https://ai.google.dev/gemini-api/docs/pricing)
 - [Groq のモデル一覧と料金](https://console.groq.com/docs/models)／[Groq の構造化出力](https://console.groq.com/docs/structured-outputs)／[Groq のデータの扱い](https://console.groq.com/docs/your-data)／[Groq の利用規約](https://console.groq.com/docs/legal/services-agreement)
 - [日本語LLMランキング 2026（Nejumi Leaderboard 4 の分析、9月1日版を10月22日時点で更新）](https://journal.qualiteg.com/llm-ranking-2026/)
+- 端末内モデル: [Apple の Foundation Models 発表（対応言語に日本語）](https://www.apple.com/newsroom/2025/09/apples-foundation-models-framework-unlocks-new-intelligent-app-experiences/)／[Apple Intelligence の日本語対応（iOS 18.4）](https://www.apple.com/newsroom/2025/03/apple-intelligence-features-expand-to-new-languages-and-regions-today/)／[Apple Intelligence の入手方法と対応言語](https://support.apple.com/en-us/121115)／[Apple の技術レポート（guided generation）](https://arxiv.org/pdf/2507.13575)／[Foundation Models の解説（4Kトークンの制限など）](https://www.atelier-socle.com/en/articles/foundation-models-api-guide)／[ML Kit GenAI の概要](https://developers.google.com/ml-kit/genai)／[ML Kit GenAI Prompt API のアルファ版発表](https://android-developers.googleblog.com/2025/10/ml-kit-genai-prompt-api-alpha-release.html)／[Chrome の Prompt API](https://developer.chrome.com/docs/ai/prompt-api)／[Chrome の内蔵AIの解説（動作条件）](https://noqta.tn/en/tutorials/chrome-built-in-ai-prompt-api-gemini-nano-2026)／[iOS 26 の WebGPU](https://appdevelopermagazine.com/webgpu-in-ios-26/)
