@@ -19,7 +19,7 @@ Claude Codeがこのリポジトリを理解するためのガイド。ゲーム
 | フロントエンド（Web） | React / Next.js |
 | モバイルアプリ | React Native または Flutter |
 | データベース | PostgreSQL |
-| タスク解析（分類・分解） | サーバ側から呼ぶLLM（初期は Claude API の Haiku 5.5） |
+| タスク解析（分類・分解） | サーバ側から呼ぶLLM（モデルは比較して決める。候補は `docs/MODEL_CANDIDATES.md`） |
 | 認証 | Firebase Auth または Auth.js |
 
 ---
