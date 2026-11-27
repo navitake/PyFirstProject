@@ -271,7 +271,7 @@ table.mini th{color:var(--ink-dim); font-weight:600}
 
   <footer class="note">
     確定済み: 成長テーブル / 日次乗数 / HP・MP式 / ダメージ式 / 職業しきい値 / Tier1スキル / コンボ4種 / 通常攻撃(STR・INTの高い方×0.7) / タスクコマンド装備2枠。
-    仮実装（未確定）: Tier2スキル（案） ・主ステ加算の割合 0.5 ・会心率 5+DEX×0.5% ・回避率 DEX×0.4% ・敵能力値 ・タスクコマンドの威力 ・攻略ポイント配分 ・装備3枠パーク。
+    仮実装（未確定）: Tier2スキル（案） ・主ステ加算の割合 0.5 ・防御70%/攻撃バフ+67%/集中+100% ・会心率 5+DEX×0.5% ・回避率 DEX×0.4% ・敵能力値 ・タスクコマンドの威力 ・攻略ポイント配分 ・装備3枠パーク。
     未実装: お助けコマンド / パーマネントスキル装備 / 難易度選択。
   </footer>
 </div>
@@ -347,20 +347,25 @@ const JOBS = [
 
 /* 主ステータスを攻撃力に足す割合（★仮）。VIT・DEX・MND が主ステの6職の攻撃スキル1つに使う */
 const MAIN_ADD = 0.5;
+/* 攻撃バフ（★仮）。使ったターンを含めて効果が切れるまでの合計ダメージが、通常どおり攻撃した場合の1.25倍になる倍率。
+   N行動のバフなら N×(1+x) = 1.25×(N+1)。N=3 で x≒67%。
+   効果ターンは敵の行動後に1減るので、使ったターンのぶん +1 して「使った後のN行動」に効かせる */
+const BUFF3 = 67;
+const BUFF_T = n => n+1;
 
 /* ===== Tier1 職業スキル（確定） ===== */
 const SKILLS = {
   '戦士':[
     {n:'パワースラッシュ', mp:4, d:'STR×1.4 物理', use:g=>g.hitP(1.4,'パワースラッシュ')},
     {n:'渾身の一撃', mp:8, d:'STR×1.8 物理', use:g=>g.hitP(1.8,'渾身の一撃')},
-    {n:'挑発の構え', mp:3, d:'1T 被物理-40%', use:g=>{g.playerEff.physCut={v:40,t:1}; g.log('どっしりと構えた。被物理ダメージ-40%','t-gold');}},
-    {n:'雄叫び', mp:5, d:'3T 物理攻撃+20%', use:g=>{g.playerEff.atkUp={v:20,t:3}; g.log('雄叫びを上げた！ 攻撃+20%','t-gold');}},
+    {n:'挑発の構え', mp:3, d:'1T 被物理-70%', use:g=>{g.playerEff.physCut={v:70,t:1}; g.log('どっしりと構えた。被物理ダメージ-70%','t-gold');}},
+    {n:'雄叫び', mp:5, d:'次の3行動 物理攻撃+67%', use:g=>{g.playerEff.atkUp={v:BUFF3,t:BUFF_T(3)}; g.log(`雄叫びを上げた！ 攻撃+${BUFF3}%`,'t-gold');}},
   ],
   '魔法使い':[
     {n:'ファイアボルト', mp:6, d:'INT×1.6 魔法', use:g=>g.hitM(1.6,'ファイアボルト')},
     {n:'ブリザード', mp:12, d:'INT×2.2 魔法 + 敵攻撃-10%(1T)', use:g=>{g.hitM(2.2,'ブリザード'); if(g.enemy.hp>0){g.enemyEff.atkDown={v:10,t:1}; g.log('敵は凍えている。攻撃-10%','t-gold');}}},
     {n:'マナシールド', mp:4, d:'2T 被ダメの50%をMPで肩代わり', use:g=>{g.playerEff.manaShield={t:2}; g.log('魔力の盾を張った','t-mp');}},
-    {n:'集中', mp:5, d:'次の魔法ダメージ+50%', use:g=>{g.playerEff.focus=true; g.log('精神を集中する……次の魔法+50%','t-gold');}},
+    {n:'集中', mp:5, d:'次の魔法ダメージ+100%', use:g=>{g.playerEff.focus=true; g.log('精神を集中する……次の魔法+100%','t-gold');}},
   ],
   '僧侶':[
     {n:'錫杖打ち', mp:4, d:'(STR+VIT×0.5)×1.3 物理', use:g=>g.hitP(1.3,'錫杖打ち',0,1.5,g.st.VIT*MAIN_ADD)},
@@ -388,12 +393,12 @@ Object.assign(SKILLS, {
     {n:'居合斬り', mp:5, d:'STR×1.6 物理・会心+25%', use:g=>g.hitP(1.6,'居合斬り',25)},
     {n:'一刀両断', mp:12, d:'STR×2.4 物理・会心時×2.0', use:g=>g.hitP(2.4,'一刀両断',0,2.0)},
     {n:'心眼', mp:5, d:'次の物理攻撃が必ず会心', use:g=>{g.playerEff.sureCrit=true; g.log('心の目で敵の隙を捉えた。次の物理攻撃は必ず会心','t-gold');}},
-    {n:'剣気', mp:6, d:'3T 物理攻撃+30%', use:g=>{g.playerEff.atkUp={v:30,t:3}; g.log('剣気がみなぎる！ 物理攻撃+30%','t-gold');}},
+    {n:'剣気', mp:6, d:'次の3行動 物理攻撃+67%', use:g=>{g.playerEff.atkUp={v:BUFF3,t:BUFF_T(3)}; g.log(`剣気がみなぎる！ 物理攻撃+${BUFF3}%`,'t-gold');}},
   ],
   '大魔道士':[
     {n:'ライトニング', mp:7, d:'INT×1.8 魔法', use:g=>g.hitM(1.8,'ライトニング')},
     {n:'メテオ', mp:16, d:'INT×2.8 魔法', use:g=>g.hitM(2.8,'メテオ')},
-    {n:'魔力増幅', mp:6, d:'3T 魔法ダメージ+30%', use:g=>{g.playerEff.matkUp={v:30,t:3}; g.log('魔力が膨れ上がる。魔法ダメージ+30%','t-gold');}},
+    {n:'魔力増幅', mp:6, d:'次の3行動 魔法ダメージ+67%', use:g=>{g.playerEff.matkUp={v:BUFF3,t:BUFF_T(3)}; g.log(`魔力が膨れ上がる。魔法ダメージ+${BUFF3}%`,'t-gold');}},
     {n:'魔法障壁', mp:4, d:'2T 被魔法ダメージ-50%', use:g=>{g.playerEff.magCut={v:50,t:2}; g.log('魔法障壁を張った。被魔法ダメージ-50%','t-mp');}},
   ],
   '聖職者':[
@@ -431,7 +436,7 @@ const GENERIC_SKILLS = [
   {n:'がむしゃら', mp:4, d:'STR×1.4 物理（汎用・仮）', use:g=>g.hitP(1.4,'がむしゃら')},
   {n:'ひらめき', mp:6, d:'INT×1.4 魔法（汎用・仮）', use:g=>g.hitM(1.4,'ひらめき')},
   {n:'深呼吸', mp:6, d:'HP回復 VIT×2（汎用・仮）', use:g=>g.heal(g.st.VIT*2,'深呼吸')},
-  {n:'身構える', mp:3, d:'1T 被ダメージ-25%（汎用・仮）', use:g=>{g.playerEff.allCut={v:25,t:1}; g.log('身構えた。被ダメージ-25%','t-gold');}},
+  {n:'身構える', mp:3, d:'1T 被ダメージ-70%（汎用・仮）', use:g=>{g.playerEff.allCut={v:70,t:1}; g.log('身構えた。被ダメージ-70%','t-gold');}},
 ];
 
 /* ===== 敵（能力値は仮） ===== */
@@ -760,7 +765,7 @@ function bindHelpers(){
   G.hitM = (mult, label, atkAdd=0) => {
     let res = RES(G.enemy.st) * (1 - (eff(G.enemyEff,'defDown')||0)/100);
     let m = mult * (1 + (eff(G.playerEff,'matkUp')||0)/100);
-    if(G.playerEff.focus){ m*=1.5; G.playerEff.focus=false; G.log('集中の効果！','t-gold'); }
+    if(G.playerEff.focus){ m*=2.0; G.playerEff.focus=false; G.log('集中の効果！','t-gold'); }
     let d = dmgCalc(G.st.INT+atkAdd, res, m);
     G.enemy.hp -= d;
     fxc($('hero-sp'),'lunge',450); fxc($('enemy-face'),'hitfx',480);
