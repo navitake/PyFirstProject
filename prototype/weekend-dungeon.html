@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>週末ダンジョン プロトタイプ</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="タスクをこなしてキャラクターを育て、週末にダンジョンへ出発するタスク管理RPGのプロトタイプ。ブラウザだけで遊べる。">
 <style>
 :root{
   --bg:#0c1120; --panel:#141b2f; --panel2:#1a2340; --frame:#aab3d6; --frame-dim:#3c4668;
@@ -270,7 +271,7 @@ table.mini th{color:var(--ink-dim); font-weight:600}
 
   <footer class="note">
     確定済み: 成長テーブル / 日次乗数 / HP・MP式 / ダメージ式 / 職業しきい値 / Tier1スキル / コンボ4種 / 通常攻撃(STR・INTの高い方×0.7) / タスクコマンド装備2枠。
-    仮実装（未確定）: 会心率 5+DEX×0.5% ・回避率 DEX×0.4% ・敵能力値 ・タスクコマンドの威力 ・攻略ポイント配分 ・装備3枠パーク。
+    仮実装（未確定）: Tier2スキル（案） ・会心率 5+DEX×0.5% ・回避率 DEX×0.4% ・敵能力値 ・タスクコマンドの威力 ・攻略ポイント配分 ・装備3枠パーク。
     未実装: お助けコマンド / パーマネントスキル装備 / 難易度選択。
   </footer>
 </div>
@@ -377,6 +378,52 @@ const SKILLS = {
     {n:'静寂の休符', mp:8, d:'2T 敵はスキルを使えない', use:g=>{g.enemyEff.silence={t:2}; g.log('静寂が敵を包んだ。スキル封印(2T)','t-gold');}},
   ],
 };
+/* ===== Tier2 職業スキル（案・仮。SPEC「Tier 2 職業スキル（案）」準拠） ===== */
+const DRAFT_SKILL_JOBS = new Set(['剣聖','大魔道士','聖職者','忍者','禅師']);
+Object.assign(SKILLS, {
+  '剣聖':[
+    {n:'居合斬り', mp:5, d:'STR×1.6 物理・会心+25%', use:g=>g.hitP(1.6,'居合斬り',25)},
+    {n:'一刀両断', mp:12, d:'STR×2.4 物理・会心時×2.0', use:g=>g.hitP(2.4,'一刀両断',0,2.0)},
+    {n:'心眼', mp:5, d:'次の物理攻撃が必ず会心', use:g=>{g.playerEff.sureCrit=true; g.log('心の目で敵の隙を捉えた。次の物理攻撃は必ず会心','t-gold');}},
+    {n:'剣気', mp:6, d:'3T 物理攻撃+30%', use:g=>{g.playerEff.atkUp={v:30,t:3}; g.log('剣気がみなぎる！ 物理攻撃+30%','t-gold');}},
+  ],
+  '大魔道士':[
+    {n:'ライトニング', mp:7, d:'INT×1.8 魔法', use:g=>g.hitM(1.8,'ライトニング')},
+    {n:'メテオ', mp:16, d:'INT×2.8 魔法', use:g=>g.hitM(2.8,'メテオ')},
+    {n:'魔力増幅', mp:6, d:'3T 魔法ダメージ+30%', use:g=>{g.playerEff.matkUp={v:30,t:3}; g.log('魔力が膨れ上がる。魔法ダメージ+30%','t-gold');}},
+    {n:'魔法障壁', mp:4, d:'2T 被魔法ダメージ-50%', use:g=>{g.playerEff.magCut={v:50,t:2}; g.log('魔法障壁を張った。被魔法ダメージ-50%','t-mp');}},
+  ],
+  '聖職者':[
+    {n:'聖槌', mp:5, d:'STR×1.4 物理', use:g=>g.hitP(1.4,'聖槌')},
+    {n:'聖光', mp:9, d:'INT×1.8 魔法 + 敵攻撃-10%(2T)', use:g=>{g.hitM(1.8,'聖光'); if(g.enemy.hp>0){g.enemyEff.atkDown={v:10,t:2}; g.log('聖なる光に敵がひるむ。攻撃-10%','t-gold');}}},
+    {n:'ハイヒール', mp:10, d:'HP回復 VIT×4.5', use:g=>g.heal(g.st.VIT*4.5,'ハイヒール')},
+    {n:'リザレクション', mp:12, d:'この戦闘中、HP0で1度だけHP50%で復活', use:g=>{g.playerEff.revive=true; g.log('加護の光が宿った。倒れても1度だけ立ち上がれる','t-heal');}},
+  ],
+  '忍者':[
+    {n:'奇襲', mp:6, d:'STR×1.3 物理・最初のターンなら×2.6', use:g=>{ const first=g.pTurn===0; if(first) g.log('先手を取った！','t-gold'); g.hitP(first?2.6:1.3,'奇襲'); }},
+    {n:'火遁の術', mp:7, d:'INT×1.6 魔法 + 敵防御-15%(2T)', use:g=>{g.hitM(1.6,'火遁の術'); if(g.enemy.hp>0){g.enemyEff.defDown={v:15,t:2}; g.log('炎が敵の守りを焼く。防御-15%','t-gold');}}},
+    {n:'分身の術', mp:5, d:'2T 回避+50%', use:g=>{g.playerEff.evadeUp={v:50,t:2}; g.log('分身が現れた。回避+50%','t-gold');}},
+    {n:'隠れ身', mp:6, d:'このターン必ず回避・次の物理の会心+50%', use:g=>{g.playerEff.evadeAll={t:1}; g.playerEff.critNext=50; g.log('気配を消した……','t-gold');}},
+  ],
+  '禅師':[
+    {n:'一喝', mp:6, d:'STR×1.4 物理 + 敵攻撃-15%(2T)', use:g=>{g.hitP(1.4,'一喝'); if(g.enemy.hp>0){g.enemyEff.atkDown={v:15,t:2}; g.log('一喝に敵が縮み上がる。攻撃-15%','t-gold');}}},
+    {n:'禅問答', mp:6, d:'INT×1.3 魔法・20%で3倍', use:g=>{ const hit=Math.random()<0.2; if(hit) g.log('問いが核心を突いた！','t-gold'); g.hitM(hit?3.9:1.3,'禅問答'); }},
+    {n:'坐禅', mp:6, d:'HP回復 MND×3', use:g=>g.heal(g.st.MND*3,'坐禅')},
+    {n:'悟りの境地', mp:15, d:'15%天啓(敵の現HP50%)/35%HP全快/50%被ダメ-30%(3T)', use:g=>{
+      const r=Math.random();
+      if(r<0.15){
+        const d=Math.max(1,Math.round(g.enemy.hp*(g.enemy.tpl.boss?0.25:0.5)));
+        g.log('✦ 天啓が降りた！','t-gold');
+        g.enemy.hp-=d; fxc($('enemy-face'),'hitfx',480); popE(d,'crit');
+        g.log(`光の柱が敵を貫く。<span class="t-dmg">${d}</span> のダメージ`); drawEnemyHP();
+      } else if(r<0.5){
+        g.log('心が澄みわたる……','t-gold'); g.heal(maxHP(g.st)-g.hp,'悟り');
+      } else {
+        g.playerEff.allCut={v:30,t:3}; g.log('静かな境地に至った。被ダメージ-30%(3T)','t-gold');
+      }
+    }},
+  ],
+});
 const GENERIC_SKILLS = [
   {n:'がむしゃら', mp:4, d:'STR×1.4 物理（汎用・仮）', use:g=>g.hitP(1.4,'がむしゃら')},
   {n:'ひらめき', mp:6, d:'INT×1.4 魔法（汎用・仮）', use:g=>g.hitM(1.4,'ひらめき')},
@@ -469,7 +516,7 @@ const popH=(t,c)=>popup(13+Math.random()*7, 44+Math.random()*10, t, c);
 function heroFace(){
   if(picked.t===5) return '👑';
   if(picked.t===4) return '🦸';
-  const map={戦士:'🤺',魔法使い:'🧙',僧侶:'🧑‍🦲',盗賊:'🥷',吟遊詩人:'🧝'};
+  const map={戦士:'🤺',魔法使い:'🧙',僧侶:'🧑‍🦲',盗賊:'🥷',吟遊詩人:'🧝',剣聖:'⚔️',大魔道士:'🧙‍♂️',聖職者:'😇',忍者:'🥷',禅師:'🧘'};
   if(map[picked.n]) return map[picked.n];
   const s=W.stats; const top=CATS.slice().sort((a,b)=>s[b.k]-s[a.k])[0].k;
   return {STR:'🤺',INT:'🧙',VIT:'🛡️',DEX:'🥷',MND:'🧝'}[top];
@@ -549,7 +596,7 @@ function finishWeek(){
   $('job-list').innerHTML = elig.map((j,i)=>
     `<button class="job-card" data-i="${i}">
       <span class="tier">TIER ${j.t}</span> <span class="jname">${j.n}</span>
-      ${SKILLS[j.n]?'':'<span class="badge">スキル仮</span>'}
+      ${!SKILLS[j.n]?'<span class="badge">スキル仮</span>':DRAFT_SKILL_JOBS.has(j.n)?'<span class="badge">スキル案</span>':''}
       <div class="jdesc">${j.d}</div></button>`).join('');
   $('job-list').querySelectorAll('button').forEach(b=>b.onclick=()=>pickJob(elig[+b.dataset.i]));
   show('sc-job');
@@ -583,6 +630,7 @@ function pickJob(job){
     skills.map(k=>`<tr><td>${k.n}</td><td>${k.d}</td><td class="num">${k.mp}</td></tr>`).join('');
   const noteEl = $('ready-skill-note');
   if(!SKILLS[job.n]){ noteEl.style.display='block'; noteEl.textContent='この職業の固有スキルは未設計のため、汎用スキル（仮）で出撃します。'; }
+  else if(DRAFT_SKILL_JOBS.has(job.n)){ noteEl.style.display='block'; noteEl.textContent='Tier 2 のスキルは調整中の案です。数値は今後変わることがあります。'; }
   else noteEl.style.display='none';
   cmdRows = CATS.flatMap(c=>{
     const n=W.weekCount[c.k]; const out=[];
@@ -675,7 +723,7 @@ function startBattle(tpl){
   const es = tpl.s(G.floor);
   G.enemy = { tpl, st:es, hp: tpl.boss? es.VIT*6+150 : es.VIT*4+30, name:tpl.n, turn:0 };
   G.enemy.maxhp = G.enemy.hp;
-  G.playerEff={}; G.enemyEff={}; G.usedCmds=new Set(); G.firedCombos=new Set(); G.stoleThisBattle=false;
+  G.playerEff={}; G.enemyEff={}; G.usedCmds=new Set(); G.firedCombos=new Set(); G.stoleThisBattle=false; G.pTurn=0;
   const f=$('enemy-face'); f.className='sprite enemy'; f.textContent=tpl.f;
   $('scene').classList.toggle('bossbg', !!tpl.boss);
   $('enemy-window').style.display='block';
@@ -690,13 +738,16 @@ function drawEnemyHP(){ $('ehp-bar').style.width=Math.max(0,G.enemy.hp/G.enemy.m
 function eff(o,k){ return o[k] && o[k].t>0 ? o[k].v||true : (o[k]===true?true:0); }
 function bindHelpers(){
   G.enh = k => 1 + enhPct(W.weekCount[k])/100;
-  G.hitP = (mult, label, critBonus=0) => {
+  G.hitP = (mult, label, critBonus=0, critMult=1.5) => {
     let def = DEF(G.enemy.st) * (1 - (eff(G.enemyEff,'defDown')||0)/100);
     let m = mult * (1 + (eff(G.playerEff,'atkUp')||0)/100);
     let d = dmgCalc(G.st.STR, def, m);
+    if(G.playerEff.critNext){ critBonus += G.playerEff.critNext; G.playerEff.critNext=0; }
+    const sure = G.playerEff.sureCrit || critBonus>=100;
+    G.playerEff.sureCrit = false;
     const critP = Math.min(60, 5 + G.st.DEX*0.5 + critBonus);
-    const crit = Math.random()*100 < critP;
-    if(crit) d = Math.round(d*1.5);
+    const crit = sure || Math.random()*100 < critP;
+    if(crit) d = Math.round(d*critMult);
     G.enemy.hp -= d;
     fxc($('hero-sp'),'lunge',450); fxc($('enemy-face'),'hitfx',480);
     popE(d, crit?'crit':'');
@@ -705,7 +756,7 @@ function bindHelpers(){
   };
   G.hitM = (mult, label) => {
     let res = RES(G.enemy.st) * (1 - (eff(G.enemyEff,'defDown')||0)/100);
-    let m = mult;
+    let m = mult * (1 + (eff(G.playerEff,'matkUp')||0)/100);
     if(G.playerEff.focus){ m*=1.5; G.playerEff.focus=false; G.log('集中の効果！','t-gold'); }
     let d = dmgCalc(G.st.INT, res, m);
     G.enemy.hp -= d;
@@ -740,7 +791,7 @@ function battleMenu(){
       fn:()=>playerAct(()=>{ G.items[name]--; if(name==='回復薬') G.heal(120,'回復薬'); else G.gainMP(40,'マナの水'); })});
   });
   cmds.push({label:'💨 逃げる', sub:`成功率 ${escapeChance()}%`, dis:G.enemy.tpl.boss,
-    fn:()=>{ setCmds([]); if(Math.random()*100<escapeChance()){ G.log('うまく逃げ切った！','t-gold'); showEvent('💨'); afterFloorMenu(false); } else { G.log('回り込まれてしまった！','t-dmg'); enemyTurn(); } }});
+    fn:()=>{ setCmds([]); if(Math.random()*100<escapeChance()){ G.log('うまく逃げ切った！','t-gold'); showEvent('💨'); afterFloorMenu(false); } else { G.log('回り込まれてしまった！','t-dmg'); G.pTurn++; enemyTurn(); } }});
   setCmds(cmds);
 }
 function escapeChance(){ return Math.min(95, Math.round(40 + G.st.DEX*0.75)); }
@@ -757,6 +808,7 @@ function checkCombos(justUsed){
 function playerAct(fn){
   setCmds([]);
   fn();
+  G.pTurn++;
   waitMsgs(()=>{
     if(G.enemy.hp<=0){ winBattle(); return; }
     enemyTurn();
@@ -783,7 +835,7 @@ function enemyTurn(){
     G.log(`${e.name} はスキルを封じられている！`,'t-gold');
   }
   fxc($('enemy-face'),'elunge',450);
-  const evade = Math.min(75, G.st.DEX*0.4 + (eff(G.playerEff,'evadeUp')||0));
+  const evade = G.playerEff.evadeAll ? 100 : Math.min(75, G.st.DEX*0.4 + (eff(G.playerEff,'evadeUp')||0));
   if(Math.random()*100 < evade){
     popH('MISS','miss');
     G.log(`${label}！ しかし ${picked.n} はひらりとかわした`,'t-gold');
@@ -793,7 +845,7 @@ function enemyTurn(){
     const defv = mag? RES(G.st) : DEF(G.st);
     let d = dmgCalc(atkStat*atkDown, defv, mult);
     if(Math.random()<0.05) { d=Math.round(d*1.5); label+='（会心）'; }
-    let cut = (eff(G.playerEff,'allCut')||0) + (!mag ? (eff(G.playerEff,'physCut')||0) : 0);
+    let cut = (eff(G.playerEff,'allCut')||0) + (!mag ? (eff(G.playerEff,'physCut')||0) : (eff(G.playerEff,'magCut')||0));
     if(cut) d = Math.round(d*(1-Math.min(75,cut)/100));
     if(G.playerEff.manaShield && G.playerEff.manaShield.t>0 && G.mp>0){
       const toMp = Math.min(G.mp, Math.round(d*0.5));
@@ -803,6 +855,12 @@ function enemyTurn(){
     G.hp-=d;
     fxc($('scene'),'shakefx',450); popH(d,'dmg');
     G.log(`${label}！ <span class="t-dmg">${d}</span> のダメージを受けた`);
+    if(G.hp<=0 && G.playerEff.revive){
+      G.playerEff.revive=false;
+      G.hp=Math.round(maxHP(G.st)*0.5);
+      popH('+'+G.hp,'heal');
+      G.log(`加護の光が ${picked.n} を包み、立ち上がった！`,'t-heal');
+    }
     hudUpdate();
     if(G.hp<=0){ lose(); return; }
   }

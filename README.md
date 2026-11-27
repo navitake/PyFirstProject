@@ -3,6 +3,13 @@
 タスクをこなすとキャラクターが育ち、週末にダンジョンへ出発するタスク管理アプリ。
 仕様は [`docs/SPEC.md`](docs/SPEC.md)、進み具合は [`docs/PROGRESS.md`](docs/PROGRESS.md) を参照。
 
+## 遊んでみる
+
+ゲーム部分のプロトタイプはブラウザで遊べる: https://navitake.github.io/PyFirstProject/
+
+`main` の `prototype/` が更新されると GitHub Actions（`.github/workflows/pages.yml`）が自動で公開し直す。
+手元で遊ぶときは `prototype/weekend-dungeon.html` をブラウザで開くだけでよい。
+
 ## 動かし方
 
 サーバ（FastAPI）と画面（Next.js）を、それぞれ別のターミナルで起動する。
