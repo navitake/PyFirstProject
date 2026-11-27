@@ -218,7 +218,7 @@ table.mini th{color:var(--ink-dim); font-weight:600}
     </div>
     <div class="window">
       <h2>タスクコマンド — 2枠を選んで持ち込む</h2>
-      <div class="sub" style="margin-bottom:6px">今週解禁したコマンドから2つまで装備できる。パーク習得で3枠に拡張予定（未実装）。</div>
+      <div class="sub" style="margin-bottom:6px">今週解禁したコマンドから2つまで装備できる。各コマンドは1戦1回、ダンジョン全体で2回（そのカテゴリを7件以上こなした週は3回）まで。パーク習得で3枠に拡張予定（未実装）。</div>
       <table class="mini" id="ready-cmds"></table>
     </div>
     <div class="window" style="text-align:center">
@@ -271,7 +271,7 @@ table.mini th{color:var(--ink-dim); font-weight:600}
 
   <footer class="note">
     確定済み: 成長テーブル / 日次乗数 / HP・MP式 / ダメージ式 / 職業しきい値 / Tier1スキル / コンボ4種 / 通常攻撃(STR・INTの高い方×0.7) / タスクコマンド装備2枠。
-    仮実装（未確定）: Tier2スキル（案） ・会心率 5+DEX×0.5% ・回避率 DEX×0.4% ・敵能力値 ・タスクコマンドの威力 ・攻略ポイント配分 ・装備3枠パーク。
+    仮実装（未確定）: Tier2スキル（案） ・主ステ加算の割合 0.5 ・1T防御 汎用50%・戦士70% ・攻撃バフ+67% ・集中+100% ・敵の個性 ・タスクコマンドの回数（2〜3回/ダンジョン） ・会心率 5+DEX×0.5% ・回避率 DEX×0.4% ・敵能力値 ・タスクコマンドの威力 ・攻略ポイント配分 ・装備3枠パーク。
     未実装: お助けコマンド / パーマネントスキル装備 / 難易度選択。
   </footer>
 </div>
@@ -345,35 +345,43 @@ const JOBS = [
   {t:0,n:'冒険者', c:()=>true, d:'平均的な能力。成長余地が大きい'},
 ];
 
+/* 主ステータスを攻撃力に足す割合（★仮）。VIT・DEX・MND が主ステの6職の攻撃スキル1つに使う */
+const MAIN_ADD = 0.5;
+/* 攻撃バフ（★仮）。使ったターンを含めて効果が切れるまでの合計ダメージが、通常どおり攻撃した場合の1.25倍になる倍率。
+   N行動のバフなら N×(1+x) = 1.25×(N+1)。N=3 で x≒67%。
+   効果ターンは敵の行動後に1減るので、使ったターンのぶん +1 して「使った後のN行動」に効かせる */
+const BUFF3 = 67;
+const BUFF_T = n => n+1;
+
 /* ===== Tier1 職業スキル（確定） ===== */
 const SKILLS = {
   '戦士':[
     {n:'パワースラッシュ', mp:4, d:'STR×1.4 物理', use:g=>g.hitP(1.4,'パワースラッシュ')},
     {n:'渾身の一撃', mp:8, d:'STR×1.8 物理', use:g=>g.hitP(1.8,'渾身の一撃')},
-    {n:'挑発の構え', mp:3, d:'1T 被物理-40%', use:g=>{g.playerEff.physCut={v:40,t:1}; g.log('どっしりと構えた。被物理ダメージ-40%','t-gold');}},
-    {n:'雄叫び', mp:5, d:'3T 物理攻撃+20%', use:g=>{g.playerEff.atkUp={v:20,t:3}; g.log('雄叫びを上げた！ 攻撃+20%','t-gold');}},
+    {n:'挑発の構え', mp:3, d:'1T 被物理-70%', use:g=>{g.playerEff.physCut={v:70,t:1}; g.log('どっしりと構えた。被物理ダメージ-70%','t-gold');}},
+    {n:'雄叫び', mp:5, d:'次の3行動 物理攻撃+67%', use:g=>{g.playerEff.atkUp={v:BUFF3,t:BUFF_T(3)}; g.log(`雄叫びを上げた！ 攻撃+${BUFF3}%`,'t-gold');}},
   ],
   '魔法使い':[
     {n:'ファイアボルト', mp:6, d:'INT×1.6 魔法', use:g=>g.hitM(1.6,'ファイアボルト')},
     {n:'ブリザード', mp:12, d:'INT×2.2 魔法 + 敵攻撃-10%(1T)', use:g=>{g.hitM(2.2,'ブリザード'); if(g.enemy.hp>0){g.enemyEff.atkDown={v:10,t:1}; g.log('敵は凍えている。攻撃-10%','t-gold');}}},
     {n:'マナシールド', mp:4, d:'2T 被ダメの50%をMPで肩代わり', use:g=>{g.playerEff.manaShield={t:2}; g.log('魔力の盾を張った','t-mp');}},
-    {n:'集中', mp:5, d:'次の魔法ダメージ+50%', use:g=>{g.playerEff.focus=true; g.log('精神を集中する……次の魔法+50%','t-gold');}},
+    {n:'集中', mp:5, d:'次の魔法ダメージ+100%', use:g=>{g.playerEff.focus=true; g.log('精神を集中する……次の魔法+100%','t-gold');}},
   ],
   '僧侶':[
-    {n:'錫杖打ち', mp:4, d:'STR×1.3 物理', use:g=>g.hitP(1.3,'錫杖打ち')},
+    {n:'錫杖打ち', mp:4, d:'(STR+VIT×0.5)×1.3 物理', use:g=>g.hitP(1.3,'錫杖打ち',0,1.5,g.st.VIT*MAIN_ADD)},
     {n:'断罪の光', mp:8, d:'INT×1.7 魔法', use:g=>g.hitM(1.7,'断罪の光')},
     {n:'ヒール', mp:8, d:'HP回復 VIT×3', use:g=>g.heal(g.st.VIT*3,'ヒール')},
     {n:'守りの祈り', mp:5, d:'2T 被ダメージ-25%', use:g=>{g.playerEff.allCut={v:25,t:2}; g.log('祈りが体を包む。被ダメージ-25%','t-gold');}},
   ],
   '盗賊':[
-    {n:'不意打ち', mp:4, d:'STR×1.3 物理・会心+30%', use:g=>g.hitP(1.3,'不意打ち',30)},
+    {n:'不意打ち', mp:4, d:'(STR+DEX×0.5)×1.3 物理・会心+30%', use:g=>g.hitP(1.3,'不意打ち',30,1.5,g.st.DEX*MAIN_ADD)},
     {n:'毒刃', mp:6, d:'INT×1.3 魔法 + 毒(2T)', use:g=>{g.hitM(1.3,'毒刃'); if(g.enemy.hp>0){g.enemyEff.poison={t:2}; g.log('敵は毒に侵された','t-gold');}}},
     {n:'煙玉', mp:5, d:'2T 回避+40%', use:g=>{g.playerEff.evadeUp={v:40,t:2}; g.log('煙に紛れた。回避+40%','t-gold');}},
     {n:'盗む', mp:3, d:'敵からアイテムを盗む(戦闘中1回)', use:g=>{ if(g.stoleThisBattle){g.log('もう盗めるものはない','t-dim'); return;} g.stoleThisBattle=true; g.addItem(Math.random()<0.6?'回復薬':'マナの水'); }},
   ],
   '吟遊詩人':[
     {n:'挑発のセレナーデ', mp:5, d:'STR×1.3 物理 + 敵防御-20%(2T)', use:g=>{g.hitP(1.3,'挑発のセレナーデ'); if(g.enemy.hp>0){g.enemyEff.defDown={v:20,t:2}; g.log('挑発が刺さった。敵の防御-20%','t-gold');}}},
-    {n:'魂を喰む歌', mp:4, d:'INT×1.1 魔法・与ダメの50%MP回復', use:g=>{const d=g.hitM(1.1,'魂を喰む歌'); g.gainMP(Math.round(d*0.5),'魂の歌');}},
+    {n:'魂を喰む歌', mp:4, d:'(INT+MND×0.5)×1.1 魔法・与ダメの50%MP回復', use:g=>{const d=g.hitM(1.1,'魂を喰む歌',g.st.MND*MAIN_ADD); g.gainMP(Math.round(d*0.5),'魂の歌');}},
     {n:'不協和音', mp:5, d:'2T 敵攻撃-20%', use:g=>{g.enemyEff.atkDown={v:20,t:2}; g.log('不協和音が響く。敵の攻撃-20%','t-gold');}},
     {n:'静寂の休符', mp:8, d:'2T 敵はスキルを使えない', use:g=>{g.enemyEff.silence={t:2}; g.log('静寂が敵を包んだ。スキル封印(2T)','t-gold');}},
   ],
@@ -385,29 +393,29 @@ Object.assign(SKILLS, {
     {n:'居合斬り', mp:5, d:'STR×1.6 物理・会心+25%', use:g=>g.hitP(1.6,'居合斬り',25)},
     {n:'一刀両断', mp:12, d:'STR×2.4 物理・会心時×2.0', use:g=>g.hitP(2.4,'一刀両断',0,2.0)},
     {n:'心眼', mp:5, d:'次の物理攻撃が必ず会心', use:g=>{g.playerEff.sureCrit=true; g.log('心の目で敵の隙を捉えた。次の物理攻撃は必ず会心','t-gold');}},
-    {n:'剣気', mp:6, d:'3T 物理攻撃+30%', use:g=>{g.playerEff.atkUp={v:30,t:3}; g.log('剣気がみなぎる！ 物理攻撃+30%','t-gold');}},
+    {n:'剣気', mp:6, d:'次の3行動 物理攻撃+67%', use:g=>{g.playerEff.atkUp={v:BUFF3,t:BUFF_T(3)}; g.log(`剣気がみなぎる！ 物理攻撃+${BUFF3}%`,'t-gold');}},
   ],
   '大魔道士':[
     {n:'ライトニング', mp:7, d:'INT×1.8 魔法', use:g=>g.hitM(1.8,'ライトニング')},
     {n:'メテオ', mp:16, d:'INT×2.8 魔法', use:g=>g.hitM(2.8,'メテオ')},
-    {n:'魔力増幅', mp:6, d:'3T 魔法ダメージ+30%', use:g=>{g.playerEff.matkUp={v:30,t:3}; g.log('魔力が膨れ上がる。魔法ダメージ+30%','t-gold');}},
+    {n:'魔力増幅', mp:6, d:'次の3行動 魔法ダメージ+67%', use:g=>{g.playerEff.matkUp={v:BUFF3,t:BUFF_T(3)}; g.log(`魔力が膨れ上がる。魔法ダメージ+${BUFF3}%`,'t-gold');}},
     {n:'魔法障壁', mp:4, d:'2T 被魔法ダメージ-50%', use:g=>{g.playerEff.magCut={v:50,t:2}; g.log('魔法障壁を張った。被魔法ダメージ-50%','t-mp');}},
   ],
   '聖職者':[
-    {n:'聖槌', mp:5, d:'STR×1.4 物理', use:g=>g.hitP(1.4,'聖槌')},
+    {n:'聖槌', mp:5, d:'(STR+VIT×0.5)×1.4 物理', use:g=>g.hitP(1.4,'聖槌',0,1.5,g.st.VIT*MAIN_ADD)},
     {n:'聖光', mp:9, d:'INT×1.8 魔法 + 敵攻撃-10%(2T)', use:g=>{g.hitM(1.8,'聖光'); if(g.enemy.hp>0){g.enemyEff.atkDown={v:10,t:2}; g.log('聖なる光に敵がひるむ。攻撃-10%','t-gold');}}},
     {n:'ハイヒール', mp:10, d:'HP回復 VIT×4.5', use:g=>g.heal(g.st.VIT*4.5,'ハイヒール')},
     {n:'リザレクション', mp:12, d:'この戦闘中、HP0で1度だけHP50%で復活', use:g=>{g.playerEff.revive=true; g.log('加護の光が宿った。倒れても1度だけ立ち上がれる','t-heal');}},
   ],
   '忍者':[
-    {n:'奇襲', mp:6, d:'STR×1.3 物理・最初のターンなら×2.6', use:g=>{ const first=g.pTurn===0; if(first) g.log('先手を取った！','t-gold'); g.hitP(first?2.6:1.3,'奇襲'); }},
+    {n:'奇襲', mp:6, d:'(STR+DEX×0.5)×1.3 物理・最初のターンなら×2.6', use:g=>{ const first=g.pTurn===0; if(first) g.log('先手を取った！','t-gold'); g.hitP(first?2.6:1.3,'奇襲',0,1.5,g.st.DEX*MAIN_ADD); }},
     {n:'火遁の術', mp:7, d:'INT×1.6 魔法 + 敵防御-15%(2T)', use:g=>{g.hitM(1.6,'火遁の術'); if(g.enemy.hp>0){g.enemyEff.defDown={v:15,t:2}; g.log('炎が敵の守りを焼く。防御-15%','t-gold');}}},
     {n:'分身の術', mp:5, d:'2T 回避+50%', use:g=>{g.playerEff.evadeUp={v:50,t:2}; g.log('分身が現れた。回避+50%','t-gold');}},
     {n:'隠れ身', mp:6, d:'このターン必ず回避・次の物理の会心+50%', use:g=>{g.playerEff.evadeAll={t:1}; g.playerEff.critNext=50; g.log('気配を消した……','t-gold');}},
   ],
   '禅師':[
     {n:'一喝', mp:6, d:'STR×1.4 物理 + 敵攻撃-15%(2T)', use:g=>{g.hitP(1.4,'一喝'); if(g.enemy.hp>0){g.enemyEff.atkDown={v:15,t:2}; g.log('一喝に敵が縮み上がる。攻撃-15%','t-gold');}}},
-    {n:'禅問答', mp:6, d:'INT×1.3 魔法・20%で3倍', use:g=>{ const hit=Math.random()<0.2; if(hit) g.log('問いが核心を突いた！','t-gold'); g.hitM(hit?3.9:1.3,'禅問答'); }},
+    {n:'禅問答', mp:6, d:'(INT+MND×0.5)×1.3 魔法・20%で3倍', use:g=>{ const hit=Math.random()<0.2; if(hit) g.log('問いが核心を突いた！','t-gold'); g.hitM(hit?3.9:1.3,'禅問答',g.st.MND*MAIN_ADD); }},
     {n:'坐禅', mp:6, d:'HP回復 MND×3', use:g=>g.heal(g.st.MND*3,'坐禅')},
     {n:'悟りの境地', mp:15, d:'15%天啓(敵の現HP50%)/35%HP全快/50%被ダメ-30%(3T)', use:g=>{
       const r=Math.random();
@@ -428,22 +436,27 @@ const GENERIC_SKILLS = [
   {n:'がむしゃら', mp:4, d:'STR×1.4 物理（汎用・仮）', use:g=>g.hitP(1.4,'がむしゃら')},
   {n:'ひらめき', mp:6, d:'INT×1.4 魔法（汎用・仮）', use:g=>g.hitM(1.4,'ひらめき')},
   {n:'深呼吸', mp:6, d:'HP回復 VIT×2（汎用・仮）', use:g=>g.heal(g.st.VIT*2,'深呼吸')},
-  {n:'身構える', mp:3, d:'1T 被ダメージ-25%（汎用・仮）', use:g=>{g.playerEff.allCut={v:25,t:1}; g.log('身構えた。被ダメージ-25%','t-gold');}},
+  {n:'身構える', mp:3, d:'1T 被ダメージ-50%（汎用・仮）', use:g=>{g.playerEff.allCut={v:50,t:1}; g.log('身構えた。被ダメージ-50%','t-gold');}},
 ];
 
 /* ===== 敵（能力値は仮） ===== */
+/* 敵の個性（★仮）: physRes/magRes=被ダメ軽減率, evade=物理攻撃の回避率, enrage=HP半分以下で攻撃×倍率,
+   poisonAtk=攻撃が当たると毒（毎ターン最大HPの割合）, skill=周期攻撃（前のターンに予告する） */
 const FOES = [
-  {n:'スライム', f:'🟢', min:1, s:f=>({STR:6+4*f, INT:2, VIT:5+3*f, DEX:4, MND:2})},
-  {n:'洞窟コウモリ', f:'🦇', min:1, s:f=>({STR:5+4*f, INT:2, VIT:4+2*f, DEX:12+2*f, MND:2})},
-  {n:'ゴブリン', f:'👺', min:2, s:f=>({STR:9+5*f, INT:3, VIT:7+3*f, DEX:8, MND:3})},
-  {n:'魔導コケ', f:'🍄', min:2, s:f=>({STR:4, INT:9+5*f, VIT:6+3*f, DEX:4, MND:8+2*f}), type:'mag'},
-  {n:'骸骨剣士', f:'💀', min:3, s:f=>({STR:12+5*f, INT:4, VIT:9+3*f, DEX:10, MND:4})},
+  {n:'スライム', f:'🟢', min:1, s:f=>({STR:6+4*f, INT:2, VIT:5+3*f, DEX:4, MND:2}), physRes:0.5, trait:'物理半減'},
+  {n:'洞窟コウモリ', f:'🦇', min:1, s:f=>({STR:5+4*f, INT:2, VIT:4+2*f, DEX:12+2*f, MND:2}), evade:0.4, trait:'物理を40%回避'},
+  {n:'ゴブリン', f:'👺', min:2, s:f=>({STR:9+5*f, INT:3, VIT:7+3*f, DEX:8, MND:3}), enrage:1.5, trait:'HP半分で激昂'},
+  {n:'魔導コケ', f:'🍄', min:2, s:f=>({STR:4, INT:9+5*f, VIT:6+3*f, DEX:4, MND:8+2*f}), type:'mag', magRes:0.5, poisonAtk:0.04, trait:'魔法半減・毒胞子'},
+  {n:'骸骨剣士', f:'💀', min:3, s:f=>({STR:12+5*f, INT:4, VIT:9+3*f, DEX:10, MND:4}),
+   skill:{n:'渾身の斬撃', every:3, mult:2.5}, trait:'3ターンごとに大技'},
   {n:'呪術師', f:'🧙', min:4, s:f=>({STR:6, INT:14+5*f, VIT:8+3*f, DEX:8, MND:10+2*f}), type:'mag',
-   skill:{n:'呪縛の詠唱', every:2, mult:1.8}},
+   skill:{n:'呪縛の詠唱', every:2, mult:1.8}, trait:'2ターンごとに大技'},
 ];
 const BOSS = {n:'月曜の影', f:'🌑', s:()=>({STR:36, INT:36, VIT:52, DEX:14, MND:28}),
   skill:{n:'絶望の宣告', every:3, mult:2.0, mag:true}, boss:true};
 const FLOORS = 7; // 6フロア + ボス
+/* タスクコマンドの使用回数（★仮）。1戦1回に加えて、ダンジョン全体で回数を持つ。そのカテゴリを7件以上こなした週は3回、それ以外は2回 */
+const cmdUses = n => n>=7 ? 3 : 2;
 
 /* ===== 状態 ===== */
 let W, G;
@@ -651,6 +664,7 @@ function depart(){
     items:{'回復薬':1,'マナの水':0}, // 初期支給1個（仮）
     skills: SKILLS[picked.n] || GENERIC_SKILLS,
     taskCmds: eqSel.map(i=>cmdRows[i]),
+    cmdLeft: Object.fromEntries(eqSel.map(i=>[cmdRows[i].cmd.n, cmdUses(cmdRows[i].n)])),
     log:(m,cls)=>say(m,cls),
   };
   MSG.q.length=0; MSG.busy=false; MSG.onDone=null;
@@ -728,7 +742,7 @@ function startBattle(tpl){
   $('scene').classList.toggle('bossbg', !!tpl.boss);
   $('enemy-window').style.display='block';
   $('enemy-name').textContent=tpl.n;
-  $('enemy-tags').textContent=`STR ${es.STR} / INT ${es.INT} / DEF ${DEF(es)} / RES ${RES(es)}`;
+  $('enemy-tags').textContent=`STR ${es.STR} / INT ${es.INT} / DEF ${DEF(es)} / RES ${RES(es)}`+(tpl.trait?` / ${tpl.trait}`:'');
   G.log(`${tpl.n} があらわれた！`, tpl.boss?'t-gold':'');
   drawEnemyHP();
   setCmds([]);
@@ -738,27 +752,35 @@ function drawEnemyHP(){ $('ehp-bar').style.width=Math.max(0,G.enemy.hp/G.enemy.m
 function eff(o,k){ return o[k] && o[k].t>0 ? o[k].v||true : (o[k]===true?true:0); }
 function bindHelpers(){
   G.enh = k => 1 + enhPct(W.weekCount[k])/100;
-  G.hitP = (mult, label, critBonus=0, critMult=1.5) => {
+  G.hitP = (mult, label, critBonus=0, critMult=1.5, atkAdd=0) => {
     let def = DEF(G.enemy.st) * (1 - (eff(G.enemyEff,'defDown')||0)/100);
     let m = mult * (1 + (eff(G.playerEff,'atkUp')||0)/100);
-    let d = dmgCalc(G.st.STR, def, m);
+    let d = dmgCalc(G.st.STR+atkAdd, def, m);
     if(G.playerEff.critNext){ critBonus += G.playerEff.critNext; G.playerEff.critNext=0; }
     const sure = G.playerEff.sureCrit || critBonus>=100;
     G.playerEff.sureCrit = false;
     const critP = Math.min(60, 5 + G.st.DEX*0.5 + critBonus);
     const crit = sure || Math.random()*100 < critP;
     if(crit) d = Math.round(d*critMult);
+    const tp=G.enemy.tpl;
+    if(tp.evade && !sure && Math.random()<tp.evade){
+      fxc($('hero-sp'),'lunge',450); popE('MISS','miss');
+      G.log(`${label}！ しかし ${G.enemy.name} はひらりとかわした`,'t-dim');
+      return 0;
+    }
+    if(tp.physRes) d = Math.max(1, Math.round(d*(1-tp.physRes)));
     G.enemy.hp -= d;
     fxc($('hero-sp'),'lunge',450); fxc($('enemy-face'),'hitfx',480);
     popE(d, crit?'crit':'');
     G.log(`${label}！ ${crit?'<span class="t-gold">会心！</span> ':''}敵に <span class="t-dmg">${d}</span> のダメージ`);
     drawEnemyHP(); return d;
   };
-  G.hitM = (mult, label) => {
+  G.hitM = (mult, label, atkAdd=0) => {
     let res = RES(G.enemy.st) * (1 - (eff(G.enemyEff,'defDown')||0)/100);
     let m = mult * (1 + (eff(G.playerEff,'matkUp')||0)/100);
-    if(G.playerEff.focus){ m*=1.5; G.playerEff.focus=false; G.log('集中の効果！','t-gold'); }
-    let d = dmgCalc(G.st.INT, res, m);
+    if(G.playerEff.focus){ m*=2.0; G.playerEff.focus=false; G.log('集中の効果！','t-gold'); }
+    let d = dmgCalc(G.st.INT+atkAdd, res, m);
+    if(G.enemy.tpl.magRes) d = Math.max(1, Math.round(d*(1-G.enemy.tpl.magRes)));
     G.enemy.hp -= d;
     fxc($('hero-sp'),'lunge',450); fxc($('enemy-face'),'hitfx',480);
     popE(d,'mag');
@@ -781,9 +803,9 @@ function battleMenu(){
   });
   (G.taskCmds||[]).forEach(r=>{
     const cmd=r.cmd;
-    const used=G.usedCmds.has(cmd.n);
-    cmds.push({label:`◆ ${cmd.n}`, sub:used?'使用済み':`${cmd.d}（1戦1回）`, dis:used,
-      fn:()=>playerAct(()=>{ G.usedCmds.add(cmd.n); cmd.use(G); checkCombos(cmd.n); })});
+    const used=G.usedCmds.has(cmd.n), left=G.cmdLeft[cmd.n]||0;
+    cmds.push({label:`◆ ${cmd.n}`, sub:left<=0?'使い切った':used?'この戦闘では使用済み':`${cmd.d}（1戦1回・残り${left}回）`, dis:used||left<=0,
+      fn:()=>playerAct(()=>{ G.usedCmds.add(cmd.n); G.cmdLeft[cmd.n]--; cmd.use(G); checkCombos(cmd.n); })});
   });
   Object.entries(G.items).forEach(([name,ct])=>{
     if(ct<=0) return;
@@ -816,6 +838,11 @@ function playerAct(fn){
 }
 function enemyTurn(){
   const e=G.enemy, es=e.st;
+  if(G.playerEff.pPoison && G.playerEff.pPoison.t>0){
+    const pd=Math.max(1,Math.round(maxHP(G.st)*G.playerEff.pPoison.v));
+    G.hp-=pd; popH(pd,'dmg'); G.log(`毒が体を蝕む。<span class="t-dmg">${pd}</span> ダメージ`,'t-dim'); hudUpdate();
+    if(G.hp<=0){ lose(); return; }
+  }
   if(G.enemyEff.poison && G.enemyEff.poison.t>0){
     const pd=Math.max(1,Math.round(G.st.INT*0.4));
     e.hp-=pd; popE(pd,'mag');
@@ -833,6 +860,10 @@ function enemyTurn(){
     G.log(`${e.name} は力を溜めて——`,'t-dim');
   } else if(tpl.skill && silenced && e.turn % tpl.skill.every === 0){
     G.log(`${e.name} はスキルを封じられている！`,'t-gold');
+  }
+  if(tpl.enrage && e.hp <= e.maxhp/2){
+    mult*=tpl.enrage;
+    if(!e.enraged){ e.enraged=true; G.log(`${e.name} は怒り狂った！ 攻撃力が上がった`,'t-dmg'); }
   }
   fxc($('enemy-face'),'elunge',450);
   const evade = G.playerEff.evadeAll ? 100 : Math.min(75, G.st.DEX*0.4 + (eff(G.playerEff,'evadeUp')||0));
@@ -855,6 +886,9 @@ function enemyTurn(){
     G.hp-=d;
     fxc($('scene'),'shakefx',450); popH(d,'dmg');
     G.log(`${label}！ <span class="t-dmg">${d}</span> のダメージを受けた`);
+    if(tpl.poisonAtk && !(G.playerEff.pPoison && G.playerEff.pPoison.t>0)){
+      G.playerEff.pPoison={v:tpl.poisonAtk, t:3}; G.log('毒を浴びた！（2ターン）','t-dmg');
+    }
     if(G.hp<=0 && G.playerEff.revive){
       G.playerEff.revive=false;
       G.hp=Math.round(maxHP(G.st)*0.5);
@@ -865,6 +899,8 @@ function enemyTurn(){
     if(G.hp<=0){ lose(); return; }
   }
   tickEffects();
+  if(tpl.skill && !(G.enemyEff.silence && G.enemyEff.silence.t>0) && (e.turn+1) % tpl.skill.every === 0)
+    G.log(`${e.name} は大技の構えに入った……（次のターン ${tpl.skill.n}）`,'t-dmg');
   waitMsgs(battleMenu);
 }
 function tickEffects(){
