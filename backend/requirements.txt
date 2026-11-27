@@ -1,0 +1,6 @@
+fastapi>=0.162,<1
+uvicorn[standard]>=0.54,<1
+sqlalchemy>=2.1,<3
+tzdata>=2026.1  # Windows には IANA タイムゾーンのデータがないため必要
+pytest>=9,<10
+httpx2>=2.16,<3  # テスト用（FastAPI の TestClient が使う）
